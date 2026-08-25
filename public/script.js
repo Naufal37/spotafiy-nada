@@ -521,38 +521,36 @@ function resetPlayerUI() {
   updatePlayButtonIcon(false);
 }
 
-function playSong(song) {
-  // 1. Set audio source & play
-  audioPlayer.src = song.src;
-  audioPlayer.play();
+function playSong(songInput) {
+  // Ambil data lagu (baik jika input berupa ID angka maupun Objek lagu)
+  const song = typeof songInput === 'object' ? songInput : getSong(songInput);
+  if (!song || !audioEl) return;
 
-  // 2. Update Informasi di Player (Kiri Bawah)
-  const playerCover = document.querySelector('.now-playing-img'); // ganti dengan class/id tag <img> player kamu
-  const playerTitle = document.querySelector('.now-playing-title'); // ganti jika ada
-  const playerArtist = document.querySelector('.now-playing-artist'); // ganti jika ada
+  state.currentId = song.id;
 
+  // 1. Set source audio & putar lagu
+  audioEl.src = song.src;
+  audioEl.play().catch(err => console.error("Error memutar audio:", err));
+
+  // 2. Update tampilan player UI (Kiri Bawah)
+  updatePlayerUI(song);
+}
+
+// Fungsi memperbarui teks & gambar di player kiri bawah
+function updatePlayerUI(song) {
+  const playerTitle = $('#playerTitle') || document.querySelector('.now-playing-title');
+  const playerArtist = $('#playerArtist') || document.querySelector('.now-playing-artist');
+  const playerCover = $('#playerCover') || document.querySelector('.now-playing-img');
+
+  if (playerTitle) playerTitle.textContent = song.title;
+  if (playerArtist) playerArtist.textContent = song.artist;
   if (playerCover) {
-    playerCover.src = song.cover;
-  }
-  
-  // (Opsional) Tambahkan efek animasi berputar melingkar saat lagu berputar
-  if (playerCover) {
-    playerCover.classList.add('playing-spin');
+    playerCover.src = song.cover || '';
+    playerCover.style.display = song.cover ? 'block' : 'none';
   }
 }
 
-// Hentikan efek berputar saat lagu di-pause
-audioPlayer.addEventListener('pause', () => {
-  const playerCover = document.querySelector('.now-playing-img');
-  if (playerCover) playerCover.classList.remove('playing-spin');
-});
-
-// Jalankan kembali animasi saat lagu di-play
-audioPlayer.addEventListener('play', () => {
-  const playerCover = document.querySelector('.now-playing-img');
-  if (playerCover) playerCover.classList.add('playing-spin');
-});
-// Fungsi memperbarui ikon tombol pemutar bawah (#playBtn)
+// Fungsi memperbarui ikon tombol play/pause di player bawah (#playBtn)
 function updatePlayButtonIcon(isPlaying) {
   const playBtn = $('#playBtn');
   if (!playBtn) return;
@@ -561,12 +559,6 @@ function updatePlayButtonIcon(isPlaying) {
   const pauseIcon = `<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>`;
 
   playBtn.innerHTML = isPlaying ? pauseIcon : playIcon;
-}
-
-function updatePlayerUI(song) {
-  if ($('#playerTitle')) $('#playerTitle').textContent = song.title;
-  if ($('#playerArtist')) $('#playerArtist').textContent = song.artist;
-  if ($('#playerCover') && song.cover) $('#playerCover').src = song.cover;
 }
 
 $('#playBtn')?.addEventListener('click', () => {
@@ -581,10 +573,15 @@ $('#playBtn')?.addEventListener('click', () => {
   }
 });
 
-/* Event Listener Audio Utama */
+/* Event Listener Audio Utama & Animasi Berputar */
 audioEl?.addEventListener('play', () => {
   state.isPlaying = true;
   updatePlayButtonIcon(true);
+  
+  // Efek Animasi Berputar di Gambar Player Kiri Bawah
+  const playerCover = $('#playerCover') || document.querySelector('.now-playing-img');
+  if (playerCover) playerCover.classList.add('playing-spin');
+
   refreshAllRenders();
   if (state.activePlaylistId) selectPlaylist(state.activePlaylistId);
 });
@@ -592,6 +589,11 @@ audioEl?.addEventListener('play', () => {
 audioEl?.addEventListener('pause', () => {
   state.isPlaying = false;
   updatePlayButtonIcon(false);
+  
+  // Hentikan Animasi Berputar saat Pause
+  const playerCover = $('#playerCover') || document.querySelector('.now-playing-img');
+  if (playerCover) playerCover.classList.remove('playing-spin');
+
   refreshAllRenders();
   if (state.activePlaylistId) selectPlaylist(state.activePlaylistId);
 });
