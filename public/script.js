@@ -521,16 +521,37 @@ function resetPlayerUI() {
   updatePlayButtonIcon(false);
 }
 
-function playSong(id) {
-  const song = getSong(id);
-  if (!song || !audioEl) return;
-  state.currentId = song.id;
-  audioEl.src = song.src;
-  audioEl.play().catch(() => {});
-  updatePlayerUI(song);
-  refreshAllRenders();
+function playSong(song) {
+  // 1. Set audio source & play
+  audioPlayer.src = song.src;
+  audioPlayer.play();
+
+  // 2. Update Informasi di Player (Kiri Bawah)
+  const playerCover = document.querySelector('.now-playing-img'); // ganti dengan class/id tag <img> player kamu
+  const playerTitle = document.querySelector('.now-playing-title'); // ganti jika ada
+  const playerArtist = document.querySelector('.now-playing-artist'); // ganti jika ada
+
+  if (playerCover) {
+    playerCover.src = song.cover;
+  }
+  
+  // (Opsional) Tambahkan efek animasi berputar melingkar saat lagu berputar
+  if (playerCover) {
+    playerCover.classList.add('playing-spin');
+  }
 }
 
+// Hentikan efek berputar saat lagu di-pause
+audioPlayer.addEventListener('pause', () => {
+  const playerCover = document.querySelector('.now-playing-img');
+  if (playerCover) playerCover.classList.remove('playing-spin');
+});
+
+// Jalankan kembali animasi saat lagu di-play
+audioPlayer.addEventListener('play', () => {
+  const playerCover = document.querySelector('.now-playing-img');
+  if (playerCover) playerCover.classList.add('playing-spin');
+});
 // Fungsi memperbarui ikon tombol pemutar bawah (#playBtn)
 function updatePlayButtonIcon(isPlaying) {
   const playBtn = $('#playBtn');

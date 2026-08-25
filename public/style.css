@@ -392,3 +392,18 @@ input[type="range"]::-moz-range-thumb{ width:12px; height:12px; border-radius:50
 .modal-song-item:hover {
   background-color: rgba(255, 255, 255, 0.05);
 }
+
+/* Animasi putar */
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.playing-spin {
+  animation: spin 8s linear infinite;
+  border-radius: 50% !important; /* Membuat gambar jadi bundar sempurna */
+}
