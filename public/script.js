@@ -896,3 +896,59 @@ async function init() {
 }
 
 document.addEventListener('DOMContentLoaded', init);
+
+// DOM Auth Elements
+const loginBtn = document.getElementById('adminLoginBtn');
+const logoutBtn = document.getElementById('adminLogoutBtn');
+const loginModal = document.getElementById('loginModal');
+const closeLoginBtn = document.getElementById('closeLoginBtn');
+const submitLoginBtn = document.getElementById('submitLoginBtn');
+const navTambahLagu = document.querySelector('[data-section="tambah"]');
+
+// Sembunyikan menu Tambah Lagu secara default
+if (navTambahLagu) navTambahLagu.style.display = 'none';
+
+// Cek Sesi Login saat Halaman Dimuat
+async function checkAdminAuth() {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (user) {
+    if (loginBtn) loginBtn.style.display = 'none';
+    if (logoutBtn) logoutBtn.style.display = 'inline-block';
+    if (navTambahLagu) navTambahLagu.style.display = 'inline-block';
+  } else {
+    if (loginBtn) loginBtn.style.display = 'inline-block';
+    if (logoutBtn) logoutBtn.style.display = 'none';
+    if (navTambahLagu) navTambahLagu.style.display = 'none';
+  }
+}
+checkAdminAuth();
+
+// Event Listeners Modal
+if (loginBtn) loginBtn.onclick = () => loginModal.style.display = 'flex';
+if (closeLoginBtn) closeLoginBtn.onclick = () => loginModal.style.display = 'none';
+
+// Proses Login
+if (submitLoginBtn) {
+  submitLoginBtn.onclick = async () => {
+    const email = document.getElementById('adminEmail').value;
+    const password = document.getElementById('adminPassword').value;
+    
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+    if (error) {
+      alert('Login Gagal: ' + error.message);
+    } else {
+      loginModal.style.display = 'none';
+      checkAdminAuth();
+      alert('Berhasil Login sebagai Admin!');
+    }
+  };
+}
+
+// Proses Logout
+if (logoutBtn) {
+  logoutBtn.onclick = async () => {
+    await supabase.auth.signOut();
+    checkAdminAuth();
+    alert('Berhasil Logout!');
+  };
+}
