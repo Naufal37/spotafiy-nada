@@ -34,12 +34,12 @@ const $ = sel => document.querySelector(sel);
 const $$ = sel => Array.from(document.querySelectorAll(sel));
 const audioEl = $('#audioEl');
 
-function getSong(id) { 
-  return state.songs.find(s => s.id === Number(id)); 
+function getSong(id) {
+  return state.songs.find(s => s.id === Number(id));
 }
 
-function escapeHtml(str) { 
-  return (str || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); 
+function escapeHtml(str) {
+  return (str || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
 function fmtTime(sec) {
@@ -98,12 +98,17 @@ async function deleteSongAPI(id) {
 
 /* ============ CARD RENDERING ============ */
 function songCardHTML(song) {
-  const isPlaying = state.currentId === song.id && state.isPlaying;
   const isCurrent = state.currentId === song.id;
   return `
     <div class="song-card ${isCurrent ? 'playing' : ''}" data-id="${song.id}">
       <div class="card-cover ${song.cover ? '' : 'cover-fallback'}">
-        ${song.cover ? `<img src="${song.cover}" alt="${escapeHtml(song.title)}" loading="lazy">` : ''}
+        ${song.cover ? `<img src="${song.cover}" alt="${escapeHtml(song.title)}" loading="lazy">` : `<svg class="cover-note" width="26" height="26" viewBox="0 0 24 24" fill="currentColor"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>`}
+        <button class="card-heart ${song.isFavorite ? 'active' : ''}" data-action="favorite" data-id="${song.id}" title="Favorit">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="${song.isFavorite ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="2"><path d="M12 21s-7-4.35-9.5-8.5C.5 8.5 3 5 6.5 5c2 0 3.5 1 5.5 3 2-2 3.5-3 5.5-3 3.5 0 6 3.5 4 7.5C19 16.65 12 21 12 21z"/></svg>
+        </button>
+        <button class="card-delete" data-action="delete" data-id="${song.id}" title="Hapus lagu">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0-1 14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2L4 6h16z"/></svg>
+        </button>
         <button class="card-play-btn" data-action="play" data-id="${song.id}" title="Putar">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
         </button>
@@ -117,22 +122,43 @@ function songCardHTML(song) {
 function renderGrid(containerId, songs) {
   const el = $(containerId);
   if (!el) return;
-  el.innerHTML = songs.map(songCardHTML).join('');
+  el.innerHTML = songs.length
+    ? songs.map(songCardHTML).join('')
+    : '';
 }
 
 function attachGlobalListeners() {
   document.body.addEventListener('click', async (e) => {
+    const favBtn = e.target.closest('[data-action="favorite"]');
+    if (favBtn) {
+      e.stopPropagation();
+      await toggleFavoriteAPI(Number(favBtn.dataset.id));
+      refreshAllRenders();
+      updatePlayerHeart();
+      return;
+    }
+
+    const delBtn = e.target.closest('[data-action="delete"]');
+    if (delBtn) {
+      e.stopPropagation();
+      if (confirm('Hapus lagu ini dari koleksi?')) {
+        await deleteSongAPI(Number(delBtn.dataset.id));
+        refreshAllRenders();
+      }
+      return;
+    }
+
     const playBtn = e.target.closest('[data-action="play"]');
-    if (playBtn) { 
-      e.stopPropagation(); 
-      playSong(Number(playBtn.dataset.id)); 
-      return; 
+    if (playBtn) {
+      e.stopPropagation();
+      playSong(Number(playBtn.dataset.id));
+      return;
     }
 
     const card = e.target.closest('.song-card');
-    if (card) { 
-      playSong(Number(card.dataset.id)); 
-      return; 
+    if (card) {
+      playSong(Number(card.dataset.id));
+      return;
     }
   });
 }
@@ -142,21 +168,29 @@ function renderHome() {
   const recent = [...state.songs].slice(0, 6);
   renderGrid('#recentGrid', recent);
   renderGrid('#popularGrid', state.songs);
+  toggleEmpty('#recentEmpty', recent.length === 0);
 }
 
 function renderRekomendasi() {
   renderGrid('#allSongsGrid', state.songs);
+  toggleEmpty('#allSongsEmpty', state.songs.length === 0);
 }
 
 function renderFavorit() {
   const favSongs = state.songs.filter(s => s.isFavorite);
   renderGrid('#favoritGrid', favSongs);
+  toggleEmpty('#favoritEmpty', favSongs.length === 0);
+}
+
+function toggleEmpty(selector, isEmpty) {
+  const el = $(selector);
+  if (el) el.style.display = isEmpty ? 'block' : 'none';
 }
 
 /* ============ SPOTIFY STYLE PLAYLIST ============ */
 async function renderPlaylists() {
   await fetchPlaylists();
-  
+
   const mainList = $('#playlistList');
   const homeList = $('#playlistListHome');
 
@@ -170,8 +204,8 @@ async function renderPlaylists() {
   const htmlContent = state.playlists.map(p => {
     const coverUrl = p.cover || 'https://via.placeholder.com/150/222226/888888?text=Playlist';
     return `
-      <div class="playlist-card ${state.activePlaylistId === p.id ? 'active' : ''}" 
-           onclick="selectPlaylist(${p.id})" 
+      <div class="playlist-card ${state.activePlaylistId === p.id ? 'active' : ''}"
+           onclick="selectPlaylist(${p.id})"
            style="padding: 10px; margin-bottom: 8px; background: rgba(255,255,255,0.05); border-radius: 8px; cursor: pointer; display: flex; align-items: center; gap: 12px;">
         <img src="${coverUrl}" style="width:40px; height:40px; border-radius:4px; object-fit:cover;">
         <strong>${escapeHtml(p.name)}</strong>
@@ -226,7 +260,7 @@ async function selectPlaylist(id) {
           `;
         }).join('');
 
-    const playPauseIcon = state.isPlaying 
+    const playPauseIcon = state.isPlaying
       ? `<path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/>` // Icon Pause ⏸
       : `<path d="M8 5v14l11-7z"/>`;                 // Icon Play ▶
 
@@ -326,13 +360,6 @@ async function uploadPlaylistCover(event, playlistId) {
     if (res.ok) {
       await renderPlaylists();
       await selectPlaylist(playlistId);
-    } else {
-      const reader = new FileReader();
-      reader.onload = function(e) {
-        const imgEl = document.getElementById(`playlistCoverImg-${playlistId}`);
-        if (imgEl) imgEl.src = e.target.result;
-      };
-      reader.readAsDataURL(file);
     }
   } catch (err) {
     console.error('Gagal mengunggah foto playlist:', err);
@@ -440,7 +467,7 @@ async function deletePlaylist(id) {
     if (res.ok) {
       state.activePlaylistId = null;
       await renderPlaylists();
-      
+
       const emptyMsg = '<p class="empty-msg">Pilih playlist untuk melihat isinya.</p>';
       if ($('#playlistDetail')) $('#playlistDetail').innerHTML = emptyMsg;
       if ($('#playlistDetailHome')) $('#playlistDetailHome').innerHTML = emptyMsg;
@@ -482,6 +509,41 @@ function setupPlaylistForm(formId, inputId) {
   });
 }
 
+/* ============ UPLOAD LAGU BARU ============ */
+function setupUploadForm() {
+  const form = $('#uploadForm');
+  if (!form) return;
+
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const statusEl = $('#uploadStatus');
+    const submitBtn = $('#uploadSubmitBtn');
+    const formData = new FormData(form);
+
+    if (statusEl) { statusEl.textContent = 'Mengunggah lagu...'; statusEl.style.color = '#b3b3b3'; }
+    if (submitBtn) submitBtn.disabled = true;
+
+    try {
+      const res = await fetch(API.songs, { method: 'POST', body: formData });
+      const data = await res.json();
+
+      if (res.ok) {
+        if (statusEl) { statusEl.textContent = `"${data.title}" berhasil ditambahkan ke koleksi!`; statusEl.style.color = '#1ed760'; }
+        form.reset();
+        await fetchSongs();
+        refreshAllRenders();
+      } else {
+        if (statusEl) { statusEl.textContent = data.error || 'Gagal mengunggah lagu.'; statusEl.style.color = '#ff6b6b'; }
+      }
+    } catch (err) {
+      console.error('Gagal mengunggah lagu:', err);
+      if (statusEl) { statusEl.textContent = 'Terjadi kesalahan saat mengunggah.'; statusEl.style.color = '#ff6b6b'; }
+    } finally {
+      if (submitBtn) submitBtn.disabled = false;
+    }
+  });
+}
+
 /* ============ SEARCH PAGE ============ */
 function renderSearch(query) {
   const q = query.trim().toLowerCase();
@@ -489,6 +551,20 @@ function renderSearch(query) {
     s.title.toLowerCase().includes(q) || s.artist.toLowerCase().includes(q)
   );
   renderGrid('#searchGrid', results);
+  toggleEmpty('#searchEmpty', results.length === 0 && q !== '');
+}
+
+function setupSearch() {
+  const searchInput = $('#searchInput');
+  if (!searchInput) return;
+
+  searchInput.addEventListener('input', () => {
+    const q = searchInput.value;
+    if (q.trim() === '') return;
+    showSection('search');
+    if ($('#searchQueryText')) $('#searchQueryText').textContent = `Hasil pencarian untuk "${q}"`;
+    renderSearch(q);
+  });
 }
 
 function refreshAllRenders() {
@@ -502,7 +578,7 @@ function showSection(name) {
   $$('.page-section').forEach(sec => sec.classList.remove('active'));
   const target = $(`#section-${name}`);
   if (target) target.classList.add('active');
-  
+
   $$('.nav-link').forEach(link => link.classList.toggle('active', link.dataset.section === name));
 }
 
@@ -514,11 +590,63 @@ $$('.nav-link').forEach(link => {
 });
 
 /* ============ PLAYER CORE ============ */
+let isSeeking = false;
+
 function resetPlayerUI() {
   if ($('#playerTitle')) $('#playerTitle').textContent = 'Belum ada lagu';
   if ($('#playerArtist')) $('#playerArtist').textContent = 'Pilih lagu buat mulai';
   if ($('#playerCover')) $('#playerCover').src = '';
   updatePlayButtonIcon(false);
+  updatePlayerHeart();
+}
+
+// Ambil daftar lagu yang jadi "antrian" buat next/prev.
+// Kalau lagu yang lagi main ada di dalam playlist yang lagi dibuka, next/prev
+// jalan di dalam playlist itu. Kalau enggak, next/prev jalan di semua lagu.
+function getCurrentQueue() {
+  if (
+    state.activePlaylistId &&
+    state.activePlaylistSongs &&
+    state.activePlaylistSongs.some(s => s.id === state.currentId)
+  ) {
+    return state.activePlaylistSongs;
+  }
+  return state.songs;
+}
+
+function playNext() {
+  const queue = getCurrentQueue();
+  if (!queue.length) return;
+
+  const idx = queue.findIndex(s => s.id === state.currentId);
+
+  if (state.shuffle && queue.length > 1) {
+    let nextIdx;
+    do {
+      nextIdx = Math.floor(Math.random() * queue.length);
+    } while (nextIdx === idx);
+    playSong(queue[nextIdx].id);
+    return;
+  }
+
+  const nextIdx = (idx + 1) % queue.length;
+  playSong(queue[nextIdx].id);
+}
+
+function playPrev() {
+  const queue = getCurrentQueue();
+  if (!queue.length) return;
+
+  // Kalau lagu udah jalan lebih dari 3 detik, tombol prev ngulang dari awal
+  // dulu (kebiasaan umum di Spotify/YouTube Music), baru pencet lagi buat balik.
+  if (audioEl && audioEl.currentTime > 3) {
+    audioEl.currentTime = 0;
+    return;
+  }
+
+  const idx = queue.findIndex(s => s.id === state.currentId);
+  const prevIdx = idx <= 0 ? queue.length - 1 : idx - 1;
+  playSong(queue[prevIdx].id);
 }
 
 function playSong(songInput) {
@@ -548,6 +676,15 @@ function updatePlayerUI(song) {
     playerCover.src = song.cover || '';
     playerCover.style.display = song.cover ? 'block' : 'none';
   }
+  updatePlayerHeart();
+}
+
+// Update tampilan ikon hati di player bawah sesuai status favorit lagu aktif
+function updatePlayerHeart() {
+  const btn = $('#playerHeartBtn');
+  if (!btn) return;
+  const song = getSong(state.currentId);
+  btn.classList.toggle('active', !!(song && song.isFavorite));
 }
 
 // Fungsi memperbarui ikon tombol play/pause di player bawah (#playBtn)
@@ -573,11 +710,61 @@ $('#playBtn')?.addEventListener('click', () => {
   }
 });
 
+$('#nextBtn')?.addEventListener('click', playNext);
+$('#prevBtn')?.addEventListener('click', playPrev);
+
+$('#shuffleBtn')?.addEventListener('click', (e) => {
+  state.shuffle = !state.shuffle;
+  e.currentTarget.classList.toggle('active', state.shuffle);
+});
+
+$('#repeatBtn')?.addEventListener('click', (e) => {
+  state.repeat = !state.repeat;
+  e.currentTarget.classList.toggle('active', state.repeat);
+});
+
+$('#playerHeartBtn')?.addEventListener('click', async () => {
+  if (!state.currentId) return;
+  await toggleFavoriteAPI(state.currentId);
+  refreshAllRenders();
+  updatePlayerHeart();
+});
+
+/* ============ VOLUME ============ */
+function setupVolume() {
+  const volumeBar = $('#volumeBar');
+  if (!volumeBar || !audioEl) return;
+  audioEl.volume = Number(volumeBar.value);
+  volumeBar.addEventListener('input', () => {
+    audioEl.volume = Number(volumeBar.value);
+  });
+}
+
+/* ============ SEEK BAR (maju-mundur lagu) ============ */
+function setupSeekBar() {
+  const seekBarEl = $('#seekBar');
+  if (!seekBarEl || !audioEl) return;
+
+  seekBarEl.addEventListener('input', () => {
+    isSeeking = true;
+    if (audioEl.duration && $('#curTime')) {
+      $('#curTime').textContent = fmtTime((seekBarEl.value / 100) * audioEl.duration);
+    }
+  });
+
+  seekBarEl.addEventListener('change', () => {
+    if (audioEl.duration) {
+      audioEl.currentTime = (seekBarEl.value / 100) * audioEl.duration;
+    }
+    isSeeking = false;
+  });
+}
+
 /* Event Listener Audio Utama & Animasi Berputar */
 audioEl?.addEventListener('play', () => {
   state.isPlaying = true;
   updatePlayButtonIcon(true);
-  
+
   // Efek Animasi Berputar di Gambar Player Kiri Bawah
   const playerCover = $('#playerCover') || document.querySelector('.now-playing-img');
   if (playerCover) playerCover.classList.add('playing-spin');
@@ -589,7 +776,7 @@ audioEl?.addEventListener('play', () => {
 audioEl?.addEventListener('pause', () => {
   state.isPlaying = false;
   updatePlayButtonIcon(false);
-  
+
   // Hentikan Animasi Berputar saat Pause
   const playerCover = $('#playerCover') || document.querySelector('.now-playing-img');
   if (playerCover) playerCover.classList.remove('playing-spin');
@@ -598,13 +785,26 @@ audioEl?.addEventListener('pause', () => {
   if (state.activePlaylistId) selectPlaylist(state.activePlaylistId);
 });
 
+// Lagu selesai diputar -> otomatis lanjut ke lagu berikutnya (atau ulang kalau repeat aktif)
+audioEl?.addEventListener('ended', () => {
+  if (state.repeat) {
+    audioEl.currentTime = 0;
+    audioEl.play().catch(() => {});
+  } else {
+    playNext();
+  }
+});
+
 audioEl?.addEventListener('timeupdate', () => {
   if (!audioEl.duration) return;
-  const pct = (audioEl.currentTime / audioEl.duration) * 100;
-  const seekBar = $('#seekBar');
-  if (seekBar) {
-    seekBar.value = pct;
-    seekBar.style.setProperty('--pct', pct + '%');
+
+  if (!isSeeking) {
+    const pct = (audioEl.currentTime / audioEl.duration) * 100;
+    const seekBar = $('#seekBar');
+    if (seekBar) {
+      seekBar.value = pct;
+      seekBar.style.setProperty('--pct', pct + '%');
+    }
   }
   if ($('#curTime')) $('#curTime').textContent = fmtTime(audioEl.currentTime);
   if ($('#durTime')) $('#durTime').textContent = fmtTime(audioEl.duration);
@@ -614,14 +814,18 @@ audioEl?.addEventListener('timeupdate', () => {
 async function init() {
   attachGlobalListeners();
   resetPlayerUI();
-  
+
   await Promise.all([fetchSongs(), fetchPlaylists()]);
-  
+
   refreshAllRenders();
   await renderPlaylists();
 
   setupPlaylistForm('newPlaylistForm', 'newPlaylistName');
   setupPlaylistForm('newPlaylistFormHome', 'newPlaylistNameHome');
+  setupUploadForm();
+  setupSearch();
+  setupVolume();
+  setupSeekBar();
 }
 
 document.addEventListener('DOMContentLoaded', init);
