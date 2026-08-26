@@ -125,7 +125,7 @@ function songCardHTML(song) {
         <button class="card-heart ${song.isFavorite ? 'active' : ''}" data-action="favorite" data-id="${song.id}" title="Favorit">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="${song.isFavorite ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="2"><path d="M12 21s-7-4.35-9.5-8.5C.5 8.5 3 5 6.5 5c2 0 3.5 1 5.5 3 2-2 3.5-3 5.5-3 3.5 0 6 3.5 4 7.5C19 16.65 12 21 12 21z"/></svg>
         </button>
-        <button class="card-delete" data-action="delete" data-id="${song.id}" title="Hapus lagu">
+        <button class="card-delete" data-action="delete" data-id="${song.id}" title="Hapus lagu" style="display:none;">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0-1 14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2L4 6h16z"/></svg>
         </button>
         <button class="card-play-btn" data-action="play" data-id="${song.id}" title="Putar">
@@ -144,6 +144,7 @@ function renderGrid(containerId, songs) {
   el.innerHTML = songs.length
     ? songs.map(songCardHTML).join('')
     : '';
+  checkAdminAuth(); // Pastikan tombol hapus disesuaikan ulang
 }
 
 function attachGlobalListeners() {
@@ -250,7 +251,10 @@ async function selectPlaylist(id) {
   ].filter(Boolean);
 
   try {
-    // Ambil lagu-lagu dalam playlist lewat tabel playlist_songs
+    // Cek Akses Admin
+    const { data: { user } } = await supabaseClient.auth.getUser();
+    const isAdmin = !!user;
+
     const { data: relations, error: relErr } = await supabaseClient
       .from('playlist_songs')
       .select('song_id')
@@ -273,14 +277,16 @@ async function selectPlaylist(id) {
     }
 
     const playlistCover = pl.cover || '';
+    const coverClickAttr = isAdmin ? `title="Klik untuk ganti sampul" onclick="document.getElementById('playlistCoverInput-${id}').click()"` : '';
+    
     const coverImgHtml = playlistCover
-      ? `<img class="pl-banner-cover" id="playlistCoverImg-${id}" src="${playlistCover}" alt="" title="Klik untuk ganti sampul" onclick="document.getElementById('playlistCoverInput-${id}').click()">`
-      : `<div class="pl-banner-cover" id="playlistCoverImg-${id}" title="Klik untuk pasang sampul" onclick="document.getElementById('playlistCoverInput-${id}').click()" style="display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#2A2338,#1A1624);font-family:'Sora',sans-serif;font-weight:800;font-size:40px;color:var(--muted);cursor:pointer;">${escapeHtml((pl.name||'?').trim().charAt(0).toUpperCase())}</div>`;
+      ? `<img class="pl-banner-cover" id="playlistCoverImg-${id}" src="${playlistCover}" alt="" ${coverClickAttr}>`
+      : `<div class="pl-banner-cover" id="playlistCoverImg-${id}" ${coverClickAttr} style="display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#2A2338,#1A1624);font-family:'Sora',sans-serif;font-weight:800;font-size:40px;color:var(--muted);${isAdmin ? 'cursor:pointer;' : ''}">${escapeHtml((pl.name||'?').trim().charAt(0).toUpperCase())}</div>`;
 
     const totalDuration = state.activePlaylistSongs.reduce((sum, s) => sum + (s.duration || 0), 0);
 
     const rowsHtml = state.activePlaylistSongs.length === 0
-      ? `<div class="track-list-empty">Playlist ini masih kosong. Klik <strong>+ Tambah Lagu</strong> buat mulai isi.</div>`
+      ? `<div class="track-list-empty">Playlist ini masih kosong.</div>`
       : state.activePlaylistSongs.map((s, index) => {
           const isThisPlaying = state.currentId === s.id && state.isPlaying;
           const numOrEq = isThisPlaying
@@ -299,9 +305,10 @@ async function selectPlaylist(id) {
               <div class="track-album">${escapeHtml(s.album || s.title)}</div>
               <div class="track-time">
                 ${fmtTime(s.duration || 0)}
+                ${isAdmin ? `
                 <button class="track-remove" onclick="event.stopPropagation(); removeSongFromPlaylist(${id}, ${s.id})" title="Hapus dari playlist">
                   <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0-1 14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2L4 6h16z"/></svg>
-                </button>
+                </button>` : ''}
               </div>
             </div>
           `;
@@ -311,10 +318,16 @@ async function selectPlaylist(id) {
       ? `<path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/>`
       : `<path d="M8 5v14l11-7z"/>`;
 
+    const adminButtonsHtml = isAdmin ? `
+      <button class="pl-toolbar-btn" onclick="openAddSongModal(${id})">+ Tambah Lagu</button>
+      <button class="pl-toolbar-btn" onclick="renamePlaylist(${id}, '${escapeHtml(pl.name).replace(/'/g, "\\'")}')">Ganti Nama</button>
+      <button class="pl-toolbar-btn danger" onclick="deletePlaylist(${id})">Hapus Playlist</button>
+    ` : '';
+
     const detailHtml = `
       <div class="pl-banner">
         ${coverImgHtml}
-        <input type="file" id="playlistCoverInput-${id}" accept="image/*" style="display:none;" onchange="uploadPlaylistCover(event, ${id})">
+        ${isAdmin ? `<input type="file" id="playlistCoverInput-${id}" accept="image/*" style="display:none;" onchange="uploadPlaylistCover(event, ${id})">` : ''}
         <div style="min-width:0;">
           <p class="pl-eyebrow">Playlist</p>
           <h1 class="pl-title">${escapeHtml(pl.name)}</h1>
@@ -326,9 +339,7 @@ async function selectPlaylist(id) {
         <button class="pl-play-btn" onclick="togglePlayPlaylist()" title="Putar semua">
           <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor">${playPauseIcon}</svg>
         </button>
-        <button class="pl-toolbar-btn" onclick="openAddSongModal(${id})">+ Tambah Lagu</button>
-        <button class="pl-toolbar-btn" onclick="renamePlaylist(${id}, '${escapeHtml(pl.name).replace(/'/g, "\\'")}')">Ganti Nama</button>
-        <button class="pl-toolbar-btn danger" onclick="deletePlaylist(${id})">Hapus Playlist</button>
+        ${adminButtonsHtml}
       </div>
 
       <div class="track-list">
@@ -569,7 +580,6 @@ function setupUploadForm() {
     if (submitBtn) submitBtn.disabled = true;
 
     try {
-      // 1. Upload File MP3 ke Supabase Storage (Bucket "media")
       const audioPath = `songs/${Date.now()}_${audioFile.name}`;
       const { error: audioErr } = await supabaseClient.storage
         .from('media')
@@ -583,7 +593,6 @@ function setupUploadForm() {
 
       let coverUrl = null;
 
-      // 2. Upload Gambar Sampul (jika ada)
       if (coverFile) {
         const coverPath = `covers/${Date.now()}_${coverFile.name}`;
         const { error: coverErr } = await supabaseClient.storage
@@ -598,7 +607,6 @@ function setupUploadForm() {
         }
       }
 
-      // 3. Simpan data ke Database Supabase
       const { data: songData, error: dbErr } = await supabaseClient
         .from('songs')
         .insert({
@@ -897,7 +905,7 @@ async function init() {
 
 document.addEventListener('DOMContentLoaded', init);
 
-// DOM Auth Elements
+/* ============ ADMIN AUTHENTICATION ============ */
 const loginBtn = document.getElementById('adminLoginBtn');
 const logoutBtn = document.getElementById('adminLogoutBtn');
 const loginModal = document.getElementById('loginModal');
@@ -905,25 +913,31 @@ const closeLoginBtn = document.getElementById('closeLoginBtn');
 const submitLoginBtn = document.getElementById('submitLoginBtn');
 const navTambahLagu = document.querySelector('[data-section="tambah"]');
 
-// Sembunyikan menu Tambah Lagu secara default
-if (navTambahLagu) navTambahLagu.style.display = 'none';
-
-// Cek Sesi Login saat Halaman Dimuat
+// Cek Sesi Login Admin
 async function checkAdminAuth() {
-  const { data: { user } } = await supabase.auth.getUser();
-  if (user) {
-    if (loginBtn) loginBtn.style.display = 'none';
-    if (logoutBtn) logoutBtn.style.display = 'inline-block';
-    if (navTambahLagu) navTambahLagu.style.display = 'inline-block';
-  } else {
-    if (loginBtn) loginBtn.style.display = 'inline-block';
-    if (logoutBtn) logoutBtn.style.display = 'none';
-    if (navTambahLagu) navTambahLagu.style.display = 'none';
-  }
+  const { data: { user } } = await supabaseClient.auth.getUser();
+  const isAdmin = !!user;
+
+  // Tombol Navigasi Admin
+  if (loginBtn) loginBtn.style.display = isAdmin ? 'none' : 'inline-block';
+  if (logoutBtn) logoutBtn.style.display = isAdmin ? 'inline-block' : 'none';
+  if (navTambahLagu) navTambahLagu.style.display = isAdmin ? 'inline-block' : 'none';
+
+  // Form Tambah Playlist Baru
+  const formHome = $('#newPlaylistFormHome');
+  const formPage = $('#newPlaylistForm');
+  if (formHome) formHome.style.display = isAdmin ? 'flex' : 'none';
+  if (formPage) formPage.style.display = isAdmin ? 'flex' : 'none';
+
+  // Tombol Hapus pada Card Lagu
+  document.querySelectorAll('.card-delete').forEach(btn => {
+    btn.style.display = isAdmin ? 'flex' : 'none';
+  });
 }
+
 checkAdminAuth();
 
-// Event Listeners Modal
+// Event Listeners Modal Login
 if (loginBtn) loginBtn.onclick = () => loginModal.style.display = 'flex';
 if (closeLoginBtn) closeLoginBtn.onclick = () => loginModal.style.display = 'none';
 
@@ -933,12 +947,13 @@ if (submitLoginBtn) {
     const email = document.getElementById('adminEmail').value;
     const password = document.getElementById('adminPassword').value;
     
-    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+    const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password });
     if (error) {
       alert('Login Gagal: ' + error.message);
     } else {
       loginModal.style.display = 'none';
-      checkAdminAuth();
+      await checkAdminAuth();
+      if (state.activePlaylistId) selectPlaylist(state.activePlaylistId);
       alert('Berhasil Login sebagai Admin!');
     }
   };
@@ -947,8 +962,9 @@ if (submitLoginBtn) {
 // Proses Logout
 if (logoutBtn) {
   logoutBtn.onclick = async () => {
-    await supabase.auth.signOut();
-    checkAdminAuth();
+    await supabaseClient.auth.signOut();
+    await checkAdminAuth();
+    if (state.activePlaylistId) selectPlaylist(state.activePlaylistId);
     alert('Berhasil Logout!');
   };
 }
