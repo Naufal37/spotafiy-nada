@@ -40,6 +40,39 @@ function fmtTime(sec) {
   return `${m}:${s}`;
 }
 
+// Helper untuk membaca durasi file audio secara asynchronous
+function getAudioDuration(file) {
+  return new Promise((resolve) => {
+    const tempAudio = new Audio();
+    const url = URL.createObjectURL(file);
+    tempAudio.src = url;
+    tempAudio.addEventListener('loadedmetadata', () => {
+      const duration = Math.round(tempAudio.duration || 0);
+      URL.revokeObjectURL(url);
+      resolve(duration);
+    });
+    tempAudio.addEventListener('error', () => {
+      URL.revokeObjectURL(url);
+      resolve(0);
+    });
+  });
+}
+
+// Helper untuk mengambil durasi dari URL audio jika di database bernilai 0
+function fetchAudioDurationFromUrl(url) {
+  return new Promise((resolve) => {
+    if (!url) return resolve(0);
+    const tempAudio = new Audio();
+    tempAudio.src = url;
+    tempAudio.addEventListener('loadedmetadata', () => {
+      resolve(Math.round(tempAudio.duration || 0));
+    });
+    tempAudio.addEventListener('error', () => {
+      resolve(0);
+    });
+  });
+}
+
 /* ============ SUPABASE API CALLS ============ */
 async function fetchSongs() {
   try {
@@ -144,7 +177,7 @@ function renderGrid(containerId, songs) {
   el.innerHTML = songs.length
     ? songs.map(songCardHTML).join('')
     : '';
-  checkAdminAuth(); // Pastikan tombol hapus disesuaikan ulang
+  checkAdminAuth();
 }
 
 function attachGlobalListeners() {
@@ -251,7 +284,6 @@ async function selectPlaylist(id) {
   ].filter(Boolean);
 
   try {
-    // Cek Akses Admin
     const { data: { user } } = await supabaseClient.auth.getUser();
     const isAdmin = !!user;
 
@@ -272,6 +304,13 @@ async function selectPlaylist(id) {
       
       if (songsErr) throw songsErr;
       state.activePlaylistSongs = songsData || [];
+
+      // Ambil durasi secara dinamis jika di database belum tersimpan (durasi === 0)
+      for (let s of state.activePlaylistSongs) {
+        if (!s.duration || s.duration === 0) {
+          s.duration = await fetchAudioDurationFromUrl(s.src);
+        }
+      }
     } else {
       state.activePlaylistSongs = [];
     }
@@ -576,10 +615,13 @@ function setupUploadForm() {
       return;
     }
 
-    if (statusEl) { statusEl.textContent = 'Mengunggah lagu ke Supabase...'; statusEl.style.color = '#b3b3b3'; }
+    if (statusEl) { statusEl.textContent = 'Membaca file audio & mengunggah...'; statusEl.style.color = '#b3b3b3'; }
     if (submitBtn) submitBtn.disabled = true;
 
     try {
+      // Hitung durasi asli lagu MP3 yang diunggah
+      const duration = await getAudioDuration(audioFile);
+
       const audioPath = `songs/${Date.now()}_${audioFile.name}`;
       const { error: audioErr } = await supabaseClient.storage
         .from('media')
@@ -613,7 +655,8 @@ function setupUploadForm() {
           title,
           artist,
           src: audioUrlData.publicUrl,
-          cover: coverUrl
+          cover: coverUrl,
+          duration: duration
         })
         .select()
         .single();
@@ -666,7 +709,7 @@ function refreshAllRenders() {
 function showSection(name) {
   $$('.page-section').forEach(sec => sec.classList.remove('active'));
   const target = $(`#section-${name}`);
-  if (target) target.classList.add('active');
+  if (target) target.classList.add('active';
 
   $$('.nav-link').forEach(link => link.classList.toggle('active', link.dataset.section === name));
 }
@@ -913,23 +956,19 @@ const closeLoginBtn = document.getElementById('closeLoginBtn');
 const submitLoginBtn = document.getElementById('submitLoginBtn');
 const navTambahLagu = document.querySelector('[data-section="tambah"]');
 
-// Cek Sesi Login Admin
 async function checkAdminAuth() {
   const { data: { user } } = await supabaseClient.auth.getUser();
   const isAdmin = !!user;
 
-  // Tombol Navigasi Admin
   if (loginBtn) loginBtn.style.display = isAdmin ? 'none' : 'inline-block';
   if (logoutBtn) logoutBtn.style.display = isAdmin ? 'inline-block' : 'none';
   if (navTambahLagu) navTambahLagu.style.display = isAdmin ? 'inline-block' : 'none';
 
-  // Form Tambah Playlist Baru
   const formHome = $('#newPlaylistFormHome');
   const formPage = $('#newPlaylistForm');
   if (formHome) formHome.style.display = isAdmin ? 'flex' : 'none';
   if (formPage) formPage.style.display = isAdmin ? 'flex' : 'none';
 
-  // Tombol Hapus pada Card Lagu
   document.querySelectorAll('.card-delete').forEach(btn => {
     btn.style.display = isAdmin ? 'flex' : 'none';
   });
@@ -937,11 +976,9 @@ async function checkAdminAuth() {
 
 checkAdminAuth();
 
-// Event Listeners Modal Login
 if (loginBtn) loginBtn.onclick = () => loginModal.style.display = 'flex';
 if (closeLoginBtn) closeLoginBtn.onclick = () => loginModal.style.display = 'none';
 
-// Proses Login
 if (submitLoginBtn) {
   submitLoginBtn.onclick = async () => {
     const email = document.getElementById('adminEmail').value;
@@ -959,7 +996,6 @@ if (submitLoginBtn) {
   };
 }
 
-// Proses Logout
 if (logoutBtn) {
   logoutBtn.onclick = async () => {
     await supabaseClient.auth.signOut();
