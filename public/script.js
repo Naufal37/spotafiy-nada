@@ -6,7 +6,7 @@
 const SUPABASE_URL = 'https://pmoxyvqqaupzlkqldtwv.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_pYIiD94eQVX-MsR919hP6A_WOLwOI9t';
 
-const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 /* ============ STATE ============ */
 const state = {
@@ -43,7 +43,7 @@ function fmtTime(sec) {
 /* ============ SUPABASE API CALLS ============ */
 async function fetchSongs() {
   try {
-    const { data, error } = await supabase
+    const { data, error } = await supabaseClient
       .from('songs')
       .select('*')
       .order('id', { ascending: false });
@@ -57,7 +57,7 @@ async function fetchSongs() {
 
 async function fetchPlaylists() {
   try {
-    const { data, error } = await supabase
+    const { data, error } = await supabaseClient
       .from('playlists')
       .select('*')
       .order('id', { ascending: false });
@@ -76,7 +76,7 @@ async function toggleFavoriteAPI(id) {
 
     const newFavStatus = !song.isFavorite;
 
-    const { data, error } = await supabase
+    const { data, error } = await supabaseClient
       .from('songs')
       .update({ isFavorite: newFavStatus })
       .eq('id', id)
@@ -94,7 +94,7 @@ async function toggleFavoriteAPI(id) {
 
 async function deleteSongAPI(id) {
   try {
-    const { error } = await supabase
+    const { error } = await supabaseClient
       .from('songs')
       .delete()
       .eq('id', id);
@@ -251,7 +251,7 @@ async function selectPlaylist(id) {
 
   try {
     // Ambil lagu-lagu dalam playlist lewat tabel playlist_songs
-    const { data: relations, error: relErr } = await supabase
+    const { data: relations, error: relErr } = await supabaseClient
       .from('playlist_songs')
       .select('song_id')
       .eq('playlist_id', id);
@@ -261,7 +261,7 @@ async function selectPlaylist(id) {
     const songIds = (relations || []).map(r => r.song_id);
     
     if (songIds.length > 0) {
-      const { data: songsData, error: songsErr } = await supabase
+      const { data: songsData, error: songsErr } = await supabaseClient
         .from('songs')
         .select('*')
         .in('id', songIds);
@@ -373,17 +373,17 @@ async function uploadPlaylistCover(event, playlistId) {
     const fileExt = file.name.split('.').pop();
     const filePath = `playlist-covers/${playlistId}_${Date.now()}.${fileExt}`;
 
-    const { error: uploadErr } = await supabase.storage
+    const { error: uploadErr } = await supabaseClient.storage
       .from('media')
       .upload(filePath, file);
 
     if (uploadErr) throw uploadErr;
 
-    const { data: urlData } = supabase.storage
+    const { data: urlData } = supabaseClient.storage
       .from('media')
       .getPublicUrl(filePath);
 
-    const { error: updateErr } = await supabase
+    const { error: updateErr } = await supabaseClient
       .from('playlists')
       .update({ cover: urlData.publicUrl })
       .eq('id', playlistId);
@@ -437,7 +437,7 @@ function openAddSongModal(playlistId) {
 
 async function addSongToPlaylist(playlistId, songId) {
   try {
-    const { error } = await supabase
+    const { error } = await supabaseClient
       .from('playlist_songs')
       .insert({ playlist_id: playlistId, song_id: songId });
 
@@ -452,7 +452,7 @@ async function addSongToPlaylist(playlistId, songId) {
 
 async function removeSongFromPlaylist(playlistId, songId) {
   try {
-    const { error } = await supabase
+    const { error } = await supabaseClient
       .from('playlist_songs')
       .delete()
       .eq('playlist_id', playlistId)
@@ -479,7 +479,7 @@ async function renamePlaylist(id, oldName) {
   if (!newName || newName.trim() === '' || newName === oldName) return;
 
   try {
-    const { error } = await supabase
+    const { error } = await supabaseClient
       .from('playlists')
       .update({ name: newName.trim() })
       .eq('id', id);
@@ -497,7 +497,7 @@ async function deletePlaylist(id) {
   if (!confirm('Apakah kamu yakin ingin menghapus playlist ini?')) return;
 
   try {
-    const { error } = await supabase
+    const { error } = await supabaseClient
       .from('playlists')
       .delete()
       .eq('id', id);
@@ -531,7 +531,7 @@ function setupPlaylistForm(formId, inputId) {
     if (!name) return;
 
     try {
-      const { error } = await supabase
+      const { error } = await supabaseClient
         .from('playlists')
         .insert({ name });
 
@@ -571,13 +571,13 @@ function setupUploadForm() {
     try {
       // 1. Upload File MP3 ke Supabase Storage (Bucket "media")
       const audioPath = `songs/${Date.now()}_${audioFile.name}`;
-      const { error: audioErr } = await supabase.storage
+      const { error: audioErr } = await supabaseClient.storage
         .from('media')
         .upload(audioPath, audioFile);
 
       if (audioErr) throw audioErr;
 
-      const { data: audioUrlData } = supabase.storage
+      const { data: audioUrlData } = supabaseClient.storage
         .from('media')
         .getPublicUrl(audioPath);
 
@@ -586,12 +586,12 @@ function setupUploadForm() {
       // 2. Upload Gambar Sampul (jika ada)
       if (coverFile) {
         const coverPath = `covers/${Date.now()}_${coverFile.name}`;
-        const { error: coverErr } = await supabase.storage
+        const { error: coverErr } = await supabaseClient.storage
           .from('media')
           .upload(coverPath, coverFile);
 
         if (!coverErr) {
-          const { data: coverUrlData } = supabase.storage
+          const { data: coverUrlData } = supabaseClient.storage
             .from('media')
             .getPublicUrl(coverPath);
           coverUrl = coverUrlData.publicUrl;
@@ -599,7 +599,7 @@ function setupUploadForm() {
       }
 
       // 3. Simpan data ke Database Supabase
-      const { data: songData, error: dbErr } = await supabase
+      const { data: songData, error: dbErr } = await supabaseClient
         .from('songs')
         .insert({
           title,
