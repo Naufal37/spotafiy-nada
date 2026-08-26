@@ -709,11 +709,10 @@ function refreshAllRenders() {
 function showSection(name) {
   $$('.page-section').forEach(sec => sec.classList.remove('active'));
   const target = $(`#section-${name}`);
-  if (target) target.classList.add('active';
+  if (target) target.classList.add('active'); // Tambahkan tanda kurung ')' sebelum ';'
 
   $$('.nav-link').forEach(link => link.classList.toggle('active', link.dataset.section === name));
 }
-
 $$('.nav-link').forEach(link => {
   link.addEventListener('click', (e) => {
     e.preventDefault();
@@ -1003,4 +1002,4 @@ if (logoutBtn) {
     if (state.activePlaylistId) selectPlaylist(state.activePlaylistId);
     alert('Berhasil Logout!');
   };
-}
+} 
