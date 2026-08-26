@@ -2,10 +2,11 @@
    NADA — Spotify Style Music Player — script.js
    ========================================================== */
 
-const API = {
-  songs: '/api/songs',
-  playlists: '/api/playlists',
-};
+// 1. Inisialisasi Supabase
+const SUPABASE_URL = 'https://pmoxyvqqaupzlkqldtwv.supabase.co';
+const SUPABASE_ANON_KEY = 'sb_publishable_pYIiD94eQVX-MsR919hP6A_WOLwOI9t';
+
+const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 /* ============ STATE ============ */
 const state = {
@@ -39,11 +40,16 @@ function fmtTime(sec) {
   return `${m}:${s}`;
 }
 
-/* ============ API CALLS ============ */
+/* ============ SUPABASE API CALLS ============ */
 async function fetchSongs() {
   try {
-    const res = await fetch(API.songs);
-    state.songs = await res.json();
+    const { data, error } = await supabase
+      .from('songs')
+      .select('*')
+      .order('id', { ascending: false });
+
+    if (error) throw error;
+    state.songs = data || [];
   } catch (err) {
     console.error('Gagal mengambil daftar lagu:', err);
   }
@@ -51,8 +57,13 @@ async function fetchSongs() {
 
 async function fetchPlaylists() {
   try {
-    const res = await fetch(API.playlists);
-    state.playlists = await res.json();
+    const { data, error } = await supabase
+      .from('playlists')
+      .select('*')
+      .order('id', { ascending: false });
+
+    if (error) throw error;
+    state.playlists = data || [];
   } catch (err) {
     console.error('Gagal mengambil playlist:', err);
   }
@@ -60,10 +71,22 @@ async function fetchPlaylists() {
 
 async function toggleFavoriteAPI(id) {
   try {
-    const res = await fetch(`${API.songs}/${id}/favorite`, { method: 'PATCH' });
-    const updated = await res.json();
+    const song = getSong(id);
+    if (!song) return;
+
+    const newFavStatus = !song.isFavorite;
+
+    const { data, error } = await supabase
+      .from('songs')
+      .update({ isFavorite: newFavStatus })
+      .eq('id', id)
+      .select()
+      .single();
+
+    if (error) throw error;
+
     const idx = state.songs.findIndex(s => s.id === id);
-    if (idx > -1) state.songs[idx] = updated;
+    if (idx > -1) state.songs[idx] = data;
   } catch (err) {
     console.error('Gagal memperbarui status favorit:', err);
   }
@@ -71,7 +94,13 @@ async function toggleFavoriteAPI(id) {
 
 async function deleteSongAPI(id) {
   try {
-    await fetch(`${API.songs}/${id}`, { method: 'DELETE' });
+    const { error } = await supabase
+      .from('songs')
+      .delete()
+      .eq('id', id);
+
+    if (error) throw error;
+
     state.songs = state.songs.filter(s => s.id !== id);
     if (state.currentId === id) {
       state.currentId = null;
@@ -177,7 +206,7 @@ function toggleEmpty(selector, isEmpty) {
   if (el) el.style.display = isEmpty ? 'block' : 'none';
 }
 
-/* ============ SPOTIFY STYLE PLAYLIST ============ */
+/* ============ PLAYLIST FUNCTIONS ============ */
 async function renderPlaylists() {
   await fetchPlaylists();
 
@@ -201,7 +230,6 @@ async function renderPlaylists() {
         ${coverInner}
         <div style="min-width:0;">
           <div class="playlist-item-name">${escapeHtml(p.name)}</div>
-          <div class="playlist-item-count">${p.songIds ? p.songIds.length : 0} lagu</div>
         </div>
       </div>
     `;
@@ -222,8 +250,27 @@ async function selectPlaylist(id) {
   ].filter(Boolean);
 
   try {
-    const resSongs = await fetch(`${API.playlists}/${id}/songs`);
-    state.activePlaylistSongs = await resSongs.json();
+    // Ambil lagu-lagu dalam playlist lewat tabel playlist_songs
+    const { data: relations, error: relErr } = await supabase
+      .from('playlist_songs')
+      .select('song_id')
+      .eq('playlist_id', id);
+
+    if (relErr) throw relErr;
+
+    const songIds = (relations || []).map(r => r.song_id);
+    
+    if (songIds.length > 0) {
+      const { data: songsData, error: songsErr } = await supabase
+        .from('songs')
+        .select('*')
+        .in('id', songIds);
+      
+      if (songsErr) throw songsErr;
+      state.activePlaylistSongs = songsData || [];
+    } else {
+      state.activePlaylistSongs = [];
+    }
 
     const playlistCover = pl.cover || '';
     const coverImgHtml = playlistCover
@@ -302,7 +349,6 @@ async function selectPlaylist(id) {
   }
 }
 
-/* ============ TOGGLE PLAY / PAUSE PLAYLIST ============ */
 function togglePlayPlaylist() {
   if (!state.activePlaylistSongs || state.activePlaylistSongs.length === 0) return;
 
@@ -319,30 +365,38 @@ function togglePlayPlaylist() {
   }
 }
 
-/* ============ UPLOAD COVER PLAYLIST (PP) ============ */
 async function uploadPlaylistCover(event, playlistId) {
   const file = event.target.files[0];
   if (!file) return;
 
-  const formData = new FormData();
-  formData.append('cover', file);
-
   try {
-    const res = await fetch(`${API.playlists}/${playlistId}/cover`, {
-      method: 'POST',
-      body: formData
-    });
+    const fileExt = file.name.split('.').pop();
+    const filePath = `playlist-covers/${playlistId}_${Date.now()}.${fileExt}`;
 
-    if (res.ok) {
-      await renderPlaylists();
-      await selectPlaylist(playlistId);
-    }
+    const { error: uploadErr } = await supabase.storage
+      .from('media')
+      .upload(filePath, file);
+
+    if (uploadErr) throw uploadErr;
+
+    const { data: urlData } = supabase.storage
+      .from('media')
+      .getPublicUrl(filePath);
+
+    const { error: updateErr } = await supabase
+      .from('playlists')
+      .update({ cover: urlData.publicUrl })
+      .eq('id', playlistId);
+
+    if (updateErr) throw updateErr;
+
+    await renderPlaylists();
+    await selectPlaylist(playlistId);
   } catch (err) {
     console.error('Gagal mengunggah foto playlist:', err);
   }
 }
 
-/* ============ MODAL ADD SONG ============ */
 function openAddSongModal(playlistId) {
   let overlay = $('#addSongModal');
   if (!overlay) {
@@ -383,30 +437,30 @@ function openAddSongModal(playlistId) {
 
 async function addSongToPlaylist(playlistId, songId) {
   try {
-    const res = await fetch(`${API.playlists}/${playlistId}/songs`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ songId: parseInt(songId) })
-    });
+    const { error } = await supabase
+      .from('playlist_songs')
+      .insert({ playlist_id: playlistId, song_id: songId });
 
-    if (res.ok) {
-      if ($('#addSongModal')) $('#addSongModal').remove();
-      await selectPlaylist(playlistId);
-    }
+    if (error) throw error;
+
+    if ($('#addSongModal')) $('#addSongModal').remove();
+    await selectPlaylist(playlistId);
   } catch (err) {
-    console.error('Gagal menambahkan lagu:', err);
+    console.error('Gagal menambahkan lagu ke playlist:', err);
   }
 }
 
 async function removeSongFromPlaylist(playlistId, songId) {
   try {
-    const res = await fetch(`${API.playlists}/${playlistId}/songs/${songId}`, {
-      method: 'DELETE'
-    });
+    const { error } = await supabase
+      .from('playlist_songs')
+      .delete()
+      .eq('playlist_id', playlistId)
+      .eq('song_id', songId);
 
-    if (res.ok) {
-      await selectPlaylist(playlistId);
-    }
+    if (error) throw error;
+
+    await selectPlaylist(playlistId);
   } catch (err) {
     console.error('Gagal menghapus lagu dari playlist:', err);
   }
@@ -425,16 +479,15 @@ async function renamePlaylist(id, oldName) {
   if (!newName || newName.trim() === '' || newName === oldName) return;
 
   try {
-    const res = await fetch(`${API.playlists}/${id}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: newName.trim() })
-    });
+    const { error } = await supabase
+      .from('playlists')
+      .update({ name: newName.trim() })
+      .eq('id', id);
 
-    if (res.ok) {
-      await renderPlaylists();
-      await selectPlaylist(id);
-    }
+    if (error) throw error;
+
+    await renderPlaylists();
+    await selectPlaylist(id);
   } catch (err) {
     console.error('Gagal mengubah nama playlist:', err);
   }
@@ -444,16 +497,19 @@ async function deletePlaylist(id) {
   if (!confirm('Apakah kamu yakin ingin menghapus playlist ini?')) return;
 
   try {
-    const res = await fetch(`${API.playlists}/${id}`, { method: 'DELETE' });
+    const { error } = await supabase
+      .from('playlists')
+      .delete()
+      .eq('id', id);
 
-    if (res.ok) {
-      state.activePlaylistId = null;
-      await renderPlaylists();
+    if (error) throw error;
 
-      const emptyMsg = '<p class="empty-msg">Pilih playlist untuk melihat isinya.</p>';
-      if ($('#playlistDetail')) $('#playlistDetail').innerHTML = emptyMsg;
-      if ($('#playlistDetailHome')) $('#playlistDetailHome').innerHTML = emptyMsg;
-    }
+    state.activePlaylistId = null;
+    await renderPlaylists();
+
+    const emptyMsg = '<p class="empty-msg">Pilih playlist untuk melihat isinya.</p>';
+    if ($('#playlistDetail')) $('#playlistDetail').innerHTML = emptyMsg;
+    if ($('#playlistDetailHome')) $('#playlistDetailHome').innerHTML = emptyMsg;
   } catch (err) {
     console.error('Gagal menghapus playlist:', err);
   }
@@ -475,23 +531,21 @@ function setupPlaylistForm(formId, inputId) {
     if (!name) return;
 
     try {
-      const res = await fetch(API.playlists, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name })
-      });
+      const { error } = await supabase
+        .from('playlists')
+        .insert({ name });
 
-      if (res.ok) {
-        input.value = '';
-        await renderPlaylists();
-      }
+      if (error) throw error;
+
+      input.value = '';
+      await renderPlaylists();
     } catch (err) {
       console.error('Gagal membuat playlist:', err);
     }
   });
 }
 
-/* ============ UPLOAD LAGU BARU ============ */
+/* ============ UPLOAD LAGU KE SUPABASE ============ */
 function setupUploadForm() {
   const form = $('#uploadForm');
   if (!form) return;
@@ -500,23 +554,68 @@ function setupUploadForm() {
     e.preventDefault();
     const statusEl = $('#uploadStatus');
     const submitBtn = $('#uploadSubmitBtn');
-    const formData = new FormData(form);
 
-    if (statusEl) { statusEl.textContent = 'Mengunggah lagu...'; statusEl.style.color = '#b3b3b3'; }
+    const title = form.querySelector('[name="title"]')?.value || 'Tanpa Judul';
+    const artist = form.querySelector('[name="artist"]')?.value || 'Anonim';
+    const audioFile = form.querySelector('[name="audio"]')?.files[0];
+    const coverFile = form.querySelector('[name="cover"]')?.files[0];
+
+    if (!audioFile) {
+      if (statusEl) { statusEl.textContent = 'Pilih file lagu (.mp3)!'; statusEl.style.color = '#ff6b6b'; }
+      return;
+    }
+
+    if (statusEl) { statusEl.textContent = 'Mengunggah lagu ke Supabase...'; statusEl.style.color = '#b3b3b3'; }
     if (submitBtn) submitBtn.disabled = true;
 
     try {
-      const res = await fetch(API.songs, { method: 'POST', body: formData });
-      const data = await res.json();
+      // 1. Upload File MP3 ke Supabase Storage (Bucket "media")
+      const audioPath = `songs/${Date.now()}_${audioFile.name}`;
+      const { error: audioErr } = await supabase.storage
+        .from('media')
+        .upload(audioPath, audioFile);
 
-      if (res.ok) {
-        if (statusEl) { statusEl.textContent = `"${data.title}" berhasil ditambahkan ke koleksi!`; statusEl.style.color = '#1ed760'; }
-        form.reset();
-        await fetchSongs();
-        refreshAllRenders();
-      } else {
-        if (statusEl) { statusEl.textContent = data.error || 'Gagal mengunggah lagu.'; statusEl.style.color = '#ff6b6b'; }
+      if (audioErr) throw audioErr;
+
+      const { data: audioUrlData } = supabase.storage
+        .from('media')
+        .getPublicUrl(audioPath);
+
+      let coverUrl = null;
+
+      // 2. Upload Gambar Sampul (jika ada)
+      if (coverFile) {
+        const coverPath = `covers/${Date.now()}_${coverFile.name}`;
+        const { error: coverErr } = await supabase.storage
+          .from('media')
+          .upload(coverPath, coverFile);
+
+        if (!coverErr) {
+          const { data: coverUrlData } = supabase.storage
+            .from('media')
+            .getPublicUrl(coverPath);
+          coverUrl = coverUrlData.publicUrl;
+        }
       }
+
+      // 3. Simpan data ke Database Supabase
+      const { data: songData, error: dbErr } = await supabase
+        .from('songs')
+        .insert({
+          title,
+          artist,
+          src: audioUrlData.publicUrl,
+          cover: coverUrl
+        })
+        .select()
+        .single();
+
+      if (dbErr) throw dbErr;
+
+      if (statusEl) { statusEl.textContent = `"${songData.title}" berhasil ditambahkan!`; statusEl.style.color = '#1ed760'; }
+      form.reset();
+      await fetchSongs();
+      refreshAllRenders();
     } catch (err) {
       console.error('Gagal mengunggah lagu:', err);
       if (statusEl) { statusEl.textContent = 'Terjadi kesalahan saat mengunggah.'; statusEl.style.color = '#ff6b6b'; }
@@ -582,9 +681,6 @@ function resetPlayerUI() {
   updatePlayerHeart();
 }
 
-// Ambil daftar lagu yang jadi "antrian" buat next/prev.
-// Kalau lagu yang lagi main ada di dalam playlist yang lagi dibuka, next/prev
-// jalan di dalam playlist itu. Kalau enggak, next/prev jalan di semua lagu.
 function getCurrentQueue() {
   if (
     state.activePlaylistId &&
@@ -619,8 +715,6 @@ function playPrev() {
   const queue = getCurrentQueue();
   if (!queue.length) return;
 
-  // Kalau lagu udah jalan lebih dari 3 detik, tombol prev ngulang dari awal
-  // dulu (kebiasaan umum di Spotify/YouTube Music), baru pencet lagi buat balik.
   if (audioEl && audioEl.currentTime > 3) {
     audioEl.currentTime = 0;
     return;
@@ -632,21 +726,17 @@ function playPrev() {
 }
 
 function playSong(songInput) {
-  // Ambil data lagu (baik jika input berupa ID angka maupun Objek lagu)
   const song = typeof songInput === 'object' ? songInput : getSong(songInput);
   if (!song || !audioEl) return;
 
   state.currentId = song.id;
 
-  // 1. Set source audio & putar lagu
   audioEl.src = song.src;
   audioEl.play().catch(err => console.error("Error memutar audio:", err));
 
-  // 2. Update tampilan player UI (Kiri Bawah)
   updatePlayerUI(song);
 }
 
-// Fungsi memperbarui teks & gambar di player kiri bawah
 function updatePlayerUI(song) {
   const playerTitle = $('#playerTitle') || document.querySelector('.now-playing-title');
   const playerArtist = $('#playerArtist') || document.querySelector('.now-playing-artist');
@@ -661,7 +751,6 @@ function updatePlayerUI(song) {
   updatePlayerHeart();
 }
 
-// Update tampilan ikon hati di player bawah sesuai status favorit lagu aktif
 function updatePlayerHeart() {
   const btn = $('#playerHeartBtn');
   if (!btn) return;
@@ -669,7 +758,6 @@ function updatePlayerHeart() {
   btn.classList.toggle('active', !!(song && song.isFavorite));
 }
 
-// Fungsi memperbarui ikon tombol play/pause di player bawah (#playBtn)
 function updatePlayButtonIcon(isPlaying) {
   const playBtn = $('#playBtn');
   if (!playBtn) return;
@@ -722,7 +810,7 @@ function setupVolume() {
   });
 }
 
-/* ============ SEEK BAR (maju-mundur lagu) ============ */
+/* ============ SEEK BAR ============ */
 function setupSeekBar() {
   const seekBarEl = $('#seekBar');
   if (!seekBarEl || !audioEl) return;
@@ -742,12 +830,11 @@ function setupSeekBar() {
   });
 }
 
-/* Event Listener Audio Utama & Animasi Berputar */
+/* Event Listener Audio */
 audioEl?.addEventListener('play', () => {
   state.isPlaying = true;
   updatePlayButtonIcon(true);
 
-  // Efek Animasi Berputar di Gambar Player Kiri Bawah
   const playerCover = $('#playerCover') || document.querySelector('.now-playing-img');
   if (playerCover) playerCover.classList.add('playing-spin');
 
@@ -759,7 +846,6 @@ audioEl?.addEventListener('pause', () => {
   state.isPlaying = false;
   updatePlayButtonIcon(false);
 
-  // Hentikan Animasi Berputar saat Pause
   const playerCover = $('#playerCover') || document.querySelector('.now-playing-img');
   if (playerCover) playerCover.classList.remove('playing-spin');
 
@@ -767,7 +853,6 @@ audioEl?.addEventListener('pause', () => {
   if (state.activePlaylistId) selectPlaylist(state.activePlaylistId);
 });
 
-// Lagu selesai diputar -> otomatis lanjut ke lagu berikutnya (atau ulang kalau repeat aktif)
 audioEl?.addEventListener('ended', () => {
   if (state.repeat) {
     audioEl.currentTime = 0;
