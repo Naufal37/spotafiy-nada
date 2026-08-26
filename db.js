@@ -16,14 +16,14 @@ if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
 
 // Data awal (dipakai cuma sekali, waktu songs.json belum ada sama sekali)
 const DEFAULT_SONGS = [
-  { id: 1, title: "Style", artist: "Hearts2Hearts", src: "/uploads/music/audio-1787649460600-591136537.mp3", cover: "/uploads/covers/cover-1787649460687-573669513.jpg", isFavorite: false, album: "Style", duration: 210, date_added: "2026-08-20" },
-  { id: 2, title: "FOCUS", artist: "Hearts2Hearts", src: "/uploads/music/audio-1787649530310-163286826.mp3", cover: "/uploads/covers/cover-1787649530595-699239019.jpg", isFavorite: false, album: "FOCUS", duration: 210, date_added: "2026-08-20" },
-  { id: 3, title: "Rude", artist: "Hearts2Hearts", src: "/uploads/music/audio-1787649582223-15040111.mp3", cover: "/uploads/covers/cover-1787649582387-150939654.jpg", isFavorite: false, album: "Rude", duration: 210, date_added: "2026-08-20" },
-  { id: 4, title: "Shape of My Heart", artist: "Backstreet Boys", src: "/uploads/music/audio-1787649643908-629327001.mp3", cover: "/uploads/covers/cover-1787649644138-701692605.jpg", isFavorite: false, album: "Shape of My Heart", duration: 210, date_added: "2026-08-20" },
-  { id: 5, title: "Lemon Tang", artist: "Hearts2Hearts", src: "/uploads/music/audio-1787649695371-37103666.mp3", cover: "/uploads/covers/cover-1787649695655-556731487.jpg", isFavorite: false, album: "Lemon Tang", duration: 210, date_added: "2026-08-20" },
-  { id: 6, title: "GO", artist: "CORTIS", src: "/uploads/music/audio-1787649846765-551189070.mp3", cover: "/uploads/covers/cover-1787649846839-249785928.jpg", isFavorite: false, album: "GO", duration: 210, date_added: "2026-08-20" },
-  { id: 7, title: "FASHION", artist: "CORTIS", src: "/uploads/music/audio-1787649893142-429282888.mp3", cover: "/uploads/covers/cover-1787649893183-873762554.jpg", isFavorite: false, album: "FASHION", duration: 210, date_added: "2026-08-20" },
-  { id: 8, title: "ICONIC HEART", artist: "Hearts2Hearts", src: "/uploads/music/audio-1787649929001-275865192.mp3", cover: "/uploads/covers/cover-1787649929171-527971163.jpg", isFavorite: false, album: "ICONIC HEART", duration: 210, date_added: "2026-08-20" }
+  { id: 1, title: "Style", artist: "Hearts2Hearts", src: "/uploads/music/audio-1787649929001-275865192.mp3", cover: "/uploads/covers/cover-1787649929171-527971163.jpg", isFavorite: false, album: "Style", duration: 210, date_added: "2026-08-20" },
+  { id: 2, title: "FOCUS", artist: "Hearts2Hearts", src: "/uploads/music/audio-1787649893142-429282888.mp3", cover: "/uploads/covers/cover-1787649893183-873762554.jpg", isFavorite: false, album: "FOCUS", duration: 210, date_added: "2026-08-20" },
+  { id: 3, title: "Rude", artist: "Hearts2Hearts", src: "/uploads/music/audio-1787649846765-551189070.mp3", cover: "/uploads/covers/cover-1787649846839-249785928.jpg", isFavorite: false, album: "Rude", duration: 210, date_added: "2026-08-20" },
+  { id: 4, title: "Shape of My Heart", artist: "Backstreet Boys", src: "/uploads/music/audio-1787649695371-37103666.mp3", cover: "/uploads/covers/cover-1787649695655-556731487.jpg", isFavorite: false, album: "Shape of My Heart", duration: 210, date_added: "2026-08-20" },
+  { id: 5, title: "Lemon Tang", artist: "Hearts2Hearts", src: "/uploads/music/audio-1787649643908-629327001.mp3", cover: "/uploads/covers/cover-1787649644138-701692605.jpg", isFavorite: false, album: "Lemon Tang", duration: 210, date_added: "2026-08-20" },
+  { id: 6, title: "GO", artist: "CORTIS", src: "/uploads/music/audio-1787649582223-15040111.mp3", cover: "/uploads/covers/cover-1787649582387-150939654.jpg", isFavorite: false, album: "GO", duration: 210, date_added: "2026-08-20" },
+  { id: 7, title: "FASHION", artist: "CORTIS", src: "/uploads/music/audio-1787649530310-163286826.mp3", cover: "/uploads/covers/cover-1787649530595-699239019.jpg", isFavorite: false, album: "FASHION", duration: 210, date_added: "2026-08-20" },
+  { id: 8, title: "ICONIC HEART", artist: "Hearts2Hearts", src: "/uploads/music/audio-1787649460600-591136537.mp3", cover: "/uploads/covers/cover-1787649460687-573669513.jpg", isFavorite: false, album: "ICONIC HEART", duration: 210, date_added: "2026-08-20" }
 ];
 
 function loadJSON(file, fallback) {
