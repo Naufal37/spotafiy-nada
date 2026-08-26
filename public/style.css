@@ -203,6 +203,182 @@ main{ max-width:1240px; margin:0 auto; padding:0 28px; }
 
 .empty-msg{ color:var(--muted); font-size:14px; padding:20px 0; }
 
+/* ================= PLAYLIST PAGE ================= */
+.playlist-columns{
+  display:grid;
+  grid-template-columns: 280px 1fr;
+  gap:24px;
+  margin-top:20px;
+}
+@media (max-width: 860px){
+  .playlist-columns{ grid-template-columns: 1fr; }
+}
+
+.playlist-list{ display:flex; flex-direction:column; gap:6px; }
+
+.playlist-item{
+  display:flex; align-items:center; gap:12px;
+  padding:10px; border-radius:10px;
+  background:var(--bg-card);
+  border:1px solid transparent;
+  cursor:pointer;
+  transition: background .18s ease, border-color .18s ease, transform .18s ease;
+}
+.playlist-item:hover{ background:var(--bg-card-h); transform:translateX(2px); }
+.playlist-item.active{ border-color:var(--pink); background:var(--bg-card-h); }
+
+.playlist-item-cover{
+  width:44px; height:44px; border-radius:8px; object-fit:cover;
+  background:linear-gradient(135deg,#2A2338,#1A1624);
+  flex-shrink:0;
+}
+.playlist-item-name{
+  font-family:'Sora', sans-serif; font-weight:700; font-size:14px;
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+}
+.playlist-item-count{ font-size:12px; color:var(--muted); margin-top:2px; }
+
+.playlist-detail{ min-height:200px; }
+
+.pl-banner{
+  display:flex; align-items:flex-end; gap:24px; flex-wrap:wrap;
+  padding:28px; border-radius:16px;
+  background:
+    radial-gradient(ellipse 500px 300px at 20% 0%, rgba(255,77,141,0.25), transparent 65%),
+    radial-gradient(ellipse 500px 300px at 100% 100%, rgba(45,212,191,0.18), transparent 60%),
+    var(--bg-panel);
+  border:1px solid var(--line);
+  position:relative;
+  overflow:hidden;
+}
+.pl-banner-cover{
+  width:160px; height:160px; border-radius:12px; object-fit:cover;
+  box-shadow:0 16px 40px rgba(0,0,0,0.5);
+  cursor:pointer; flex-shrink:0;
+  transition: transform .2s ease;
+}
+.pl-banner-cover:hover{ transform:scale(1.03); }
+.pl-eyebrow{
+  font-family:'IBM Plex Mono', monospace; text-transform:uppercase;
+  letter-spacing:0.12em; font-size:11px; color:var(--teal); margin-bottom:10px;
+}
+.pl-title{
+  font-family:'Sora', sans-serif; font-weight:800; font-size:clamp(26px, 4vw, 42px);
+  line-height:1.08; margin-bottom:14px; word-break:break-word;
+}
+.pl-meta{ font-size:13.5px; color:var(--muted); }
+.pl-meta strong{ color:var(--text); }
+
+.pl-toolbar{ display:flex; align-items:center; gap:12px; margin:22px 0 18px; flex-wrap:wrap; }
+.pl-play-btn{
+  width:54px; height:54px; border-radius:50%; flex-shrink:0;
+  background:var(--grad); color:var(--bg-void);
+  display:flex; align-items:center; justify-content:center;
+  box-shadow:0 8px 20px rgba(255,77,141,0.35);
+  transition: transform .15s ease;
+}
+.pl-play-btn:hover{ transform:scale(1.06); }
+.pl-toolbar-btn{
+  padding:9px 16px; border-radius:999px; font-size:13px; font-weight:700;
+  font-family:'Sora', sans-serif;
+  background:var(--bg-card); border:1px solid var(--line); color:var(--text);
+  transition: background .15s ease, border-color .15s ease;
+}
+.pl-toolbar-btn:hover{ background:var(--bg-card-h); border-color:rgba(255,77,141,0.3); }
+.pl-toolbar-btn.danger{ margin-left:auto; color:#FF6B7A; border-color:rgba(255,107,122,0.25); background:transparent; }
+.pl-toolbar-btn.danger:hover{ background:rgba(255,107,122,0.1); }
+
+.track-list{ display:flex; flex-direction:column; }
+.track-list-head{
+  display:grid; grid-template-columns: 36px 1fr 140px 90px;
+  gap:12px; padding:8px 14px; border-bottom:1px solid var(--line);
+  font-family:'IBM Plex Mono', monospace; font-size:11px; text-transform:uppercase;
+  letter-spacing:0.08em; color:var(--muted);
+}
+@media (max-width:640px){
+  .track-list-head{ grid-template-columns: 30px 1fr 60px; }
+  .track-list-head .col-album{ display:none; }
+}
+
+.track-row{
+  display:grid; grid-template-columns: 36px 1fr 140px 90px;
+  align-items:center; gap:12px; padding:10px 14px; border-radius:10px;
+  cursor:pointer; transition: background .15s ease;
+}
+@media (max-width:640px){
+  .track-row{ grid-template-columns: 30px 1fr 60px; }
+  .track-row .track-album{ display:none; }
+}
+.track-row:hover{ background:var(--bg-card); }
+.track-row.playing .track-title{ color:var(--pink); }
+
+.track-num{ font-family:'IBM Plex Mono', monospace; font-size:13px; color:var(--muted); text-align:center; }
+.track-row.playing .track-num{ color:transparent; }
+.track-row .eq-bars{ position:static; background:none; padding:0; margin:0 auto; }
+
+.track-info{ display:flex; align-items:center; gap:12px; min-width:0; }
+.track-thumb{
+  width:42px; height:42px; border-radius:6px; object-fit:cover; flex-shrink:0;
+  background:linear-gradient(135deg,#2A2338,#1A1624);
+}
+.track-text{ min-width:0; }
+.track-title{
+  font-family:'Sora', sans-serif; font-weight:600; font-size:14px;
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+}
+.track-artist{ font-size:12.5px; color:var(--muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.track-album{ font-size:13px; color:var(--muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+
+.track-time{
+  display:flex; align-items:center; justify-content:flex-end; gap:10px;
+  font-family:'IBM Plex Mono', monospace; font-size:12.5px; color:var(--muted);
+}
+.track-remove{ color:var(--muted); opacity:0; transition:opacity .15s ease, color .15s ease; padding:4px; }
+.track-row:hover .track-remove{ opacity:1; }
+.track-remove:hover{ color:#FF6B7A; }
+
+.track-list-empty{ padding:40px 20px; text-align:center; color:var(--muted); font-size:14px; }
+
+.inline-form{ display:flex; gap:10px; margin-bottom:18px; }
+.inline-form input{
+  flex:1; background:var(--bg-card); border:1px solid var(--line);
+  border-radius:10px; padding:11px 14px; color:var(--text); font-size:14px;
+}
+.inline-form input:focus{ outline:none; border-color:var(--pink); }
+
+/* --- Add song modal --- */
+.modal-overlay{
+  position:fixed; inset:0; background:rgba(13,11,20,0.75);
+  backdrop-filter: blur(4px);
+  display:flex; align-items:center; justify-content:center; z-index:9999;
+  padding:20px;
+}
+.modal-box{
+  background:var(--bg-panel); border:1px solid var(--line);
+  width:100%; max-width:480px; border-radius:16px; padding:22px;
+  box-shadow:0 24px 60px rgba(0,0,0,0.5);
+}
+.modal-head{ display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; }
+.modal-head h3{ font-family:'Sora', sans-serif; font-size:17px; font-weight:700; }
+.modal-close{ color:var(--muted); font-size:20px; padding:4px; }
+.modal-close:hover{ color:var(--text); }
+.modal-list{ max-height:320px; overflow-y:auto; display:flex; flex-direction:column; gap:4px; }
+.modal-song-row{
+  display:flex; align-items:center; justify-content:space-between;
+  padding:9px 10px; border-radius:10px; cursor:pointer;
+  transition:background .15s ease;
+}
+.modal-song-row:hover{ background:var(--bg-card); }
+.modal-song-info{ display:flex; align-items:center; gap:10px; min-width:0; }
+.modal-song-thumb{ width:36px; height:36px; border-radius:6px; object-fit:cover; background:#2A2338; flex-shrink:0; }
+.modal-song-title{ font-size:13.5px; font-weight:600; }
+.modal-song-artist{ font-size:11.5px; color:var(--muted); }
+.modal-add-btn{
+  background:var(--grad); color:var(--bg-void); font-weight:700; font-size:12px;
+  padding:6px 14px; border-radius:999px; flex-shrink:0;
+}
+.modal-empty{ color:var(--muted); font-size:13.5px; padding:20px 0; text-align:center; }
+
 /* ================= FORMS (upload lagu / playlist baru) ================= */
 .upload-form, .inline-form{
   max-width:480px;

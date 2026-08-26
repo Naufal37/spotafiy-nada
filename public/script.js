@@ -7,15 +7,6 @@ const API = {
   playlists: '/api/playlists',
 };
 
-const GRADIENTS = [
-  'linear-gradient(180deg, rgba(80,80,80,0.5) 0%, rgba(18,18,18,1) 100%)',
-  'linear-gradient(180deg, rgba(160,30,80,0.5) 0%, rgba(18,18,18,1) 100%)',
-  'linear-gradient(180deg, rgba(30,100,160,0.5) 0%, rgba(18,18,18,1) 100%)',
-  'linear-gradient(180deg, rgba(40,140,80,0.5) 0%, rgba(18,18,18,1) 100%)',
-  'linear-gradient(180deg, rgba(120,50,160,0.5) 0%, rgba(18,18,18,1) 100%)',
-  'linear-gradient(180deg, rgba(180,100,30,0.5) 0%, rgba(18,18,18,1) 100%)'
-];
-
 /* ============ STATE ============ */
 const state = {
   songs: [],
@@ -25,8 +16,7 @@ const state = {
   shuffle: false,
   repeat: false,
   activePlaylistId: null,
-  activePlaylistSongs: [],
-  playlistBgIndex: {}
+  activePlaylistSongs: []
 };
 
 /* ============ DOM SHORTCUTS ============ */
@@ -202,13 +192,17 @@ async function renderPlaylists() {
   }
 
   const htmlContent = state.playlists.map(p => {
-    const coverUrl = p.cover || 'https://via.placeholder.com/150/222226/888888?text=Playlist';
+    const initials = (p.name || '?').trim().charAt(0).toUpperCase();
+    const coverInner = p.cover
+      ? `<img class="playlist-item-cover" src="${p.cover}" alt="">`
+      : `<div class="playlist-item-cover" style="display:flex;align-items:center;justify-content:center;font-family:'Sora',sans-serif;font-weight:800;color:var(--muted);">${initials}</div>`;
     return `
-      <div class="playlist-card ${state.activePlaylistId === p.id ? 'active' : ''}"
-           onclick="selectPlaylist(${p.id})"
-           style="padding: 10px; margin-bottom: 8px; background: rgba(255,255,255,0.05); border-radius: 8px; cursor: pointer; display: flex; align-items: center; gap: 12px;">
-        <img src="${coverUrl}" style="width:40px; height:40px; border-radius:4px; object-fit:cover;">
-        <strong>${escapeHtml(p.name)}</strong>
+      <div class="playlist-item ${state.activePlaylistId === p.id ? 'active' : ''}" onclick="selectPlaylist(${p.id})">
+        ${coverInner}
+        <div style="min-width:0;">
+          <div class="playlist-item-name">${escapeHtml(p.name)}</div>
+          <div class="playlist-item-count">${p.songIds ? p.songIds.length : 0} lagu</div>
+        </div>
       </div>
     `;
   }).join('');
@@ -231,84 +225,78 @@ async function selectPlaylist(id) {
     const resSongs = await fetch(`${API.playlists}/${id}/songs`);
     state.activePlaylistSongs = await resSongs.json();
 
-    const playlistCover = pl.cover || 'https://via.placeholder.com/200/333338/ffffff?text=Upload+PP';
-    const bgIndex = state.playlistBgIndex[id] || 0;
-    const currentBg = GRADIENTS[bgIndex];
+    const playlistCover = pl.cover || '';
+    const coverImgHtml = playlistCover
+      ? `<img class="pl-banner-cover" id="playlistCoverImg-${id}" src="${playlistCover}" alt="" title="Klik untuk ganti sampul" onclick="document.getElementById('playlistCoverInput-${id}').click()">`
+      : `<div class="pl-banner-cover" id="playlistCoverImg-${id}" title="Klik untuk pasang sampul" onclick="document.getElementById('playlistCoverInput-${id}').click()" style="display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#2A2338,#1A1624);font-family:'Sora',sans-serif;font-weight:800;font-size:40px;color:var(--muted);cursor:pointer;">${escapeHtml((pl.name||'?').trim().charAt(0).toUpperCase())}</div>`;
 
-    const tableRowsHtml = state.activePlaylistSongs.length === 0
-      ? `<tr><td colspan="5" style="text-align:center; padding:30px; color:#888;">Playlist ini masih kosong. Klik tombol <strong>+ Add</strong> untuk menambah lagu!</td></tr>`
+    const totalDuration = state.activePlaylistSongs.reduce((sum, s) => sum + (s.duration || 0), 0);
+
+    const rowsHtml = state.activePlaylistSongs.length === 0
+      ? `<div class="track-list-empty">Playlist ini masih kosong. Klik <strong>+ Tambah Lagu</strong> buat mulai isi.</div>`
       : state.activePlaylistSongs.map((s, index) => {
-          const coverUrl = s.cover_url || s.cover || '';
           const isThisPlaying = state.currentId === s.id && state.isPlaying;
+          const numOrEq = isThisPlaying
+            ? `<span class="eq-bars"><span></span><span></span><span></span></span>`
+            : String(index + 1).padStart(2, '0');
           return `
-            <tr onclick="playPlaylistSong(${index})" style="border-bottom: 1px solid rgba(255,255,255,0.05); cursor:pointer;" class="track-row ${isThisPlaying ? 'playing-row' : ''}">
-              <td style="padding: 12px; color: ${isThisPlaying ? '#1ed760' : '#b3b3b3'}; width: 40px; text-align: center;">${isThisPlaying ? '🔊' : index + 1}</td>
-              <td style="padding: 12px; display: flex; align-items: center; gap: 12px;">
-                ${coverUrl ? `<img src="${coverUrl}" style="width:40px; height:40px; border-radius:4px; object-fit:cover;">` : '<div style="width:40px; height:40px; background:#282828; border-radius:4px; display:flex; align-items:center; justify-content:center;">🎵</div>'}
-                <div>
-                  <div style="font-weight: 600; color: ${isThisPlaying ? '#1ed760' : '#fff'};">${escapeHtml(s.title)}</div>
-                  <div style="font-size: 13px; color: #b3b3b3;">${escapeHtml(s.artist)}</div>
+            <div class="track-row ${isThisPlaying ? 'playing' : ''}" onclick="playPlaylistSong(${index})">
+              <div class="track-num">${numOrEq}</div>
+              <div class="track-info">
+                ${s.cover ? `<img class="track-thumb" src="${s.cover}" alt="">` : `<div class="track-thumb"></div>`}
+                <div class="track-text">
+                  <div class="track-title">${escapeHtml(s.title)}</div>
+                  <div class="track-artist">${escapeHtml(s.artist)}</div>
                 </div>
-              </td>
-              <td style="padding: 12px; color: #b3b3b3; font-size: 14px;">${escapeHtml(s.album || s.title)}</td>
-              <td style="padding: 12px; color: #b3b3b3; font-size: 14px;">${s.date_added || 'Aug 25, 2026'}</td>
-              <td style="padding: 12px; color: #b3b3b3; font-size: 14px; text-align: right;">
-                ${fmtTime(s.duration || 210)}
-                <button onclick="event.stopPropagation(); removeSongFromPlaylist(${id}, ${s.id})" style="background:none; border:none; color:#ff4d4d; cursor:pointer; margin-left:10px;" title="Hapus">🗑️</button>
-              </td>
-            </tr>
+              </div>
+              <div class="track-album">${escapeHtml(s.album || s.title)}</div>
+              <div class="track-time">
+                ${fmtTime(s.duration || 0)}
+                <button class="track-remove" onclick="event.stopPropagation(); removeSongFromPlaylist(${id}, ${s.id})" title="Hapus dari playlist">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0-1 14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2L4 6h16z"/></svg>
+                </button>
+              </div>
+            </div>
           `;
         }).join('');
 
-    const playPauseIcon = state.isPlaying
-      ? `<path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/>` // Icon Pause ⏸
-      : `<path d="M8 5v14l11-7z"/>`;                 // Icon Play ▶
+    const playPauseIcon = (state.isPlaying && state.activePlaylistSongs.some(s => s.id === state.currentId))
+      ? `<path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/>`
+      : `<path d="M8 5v14l11-7z"/>`;
 
-    const spotifyViewHtml = `
-      <!-- Banner Header Spotify Style -->
-      <div id="playlistBanner-${id}" style="display: flex; gap: 24px; align-items: flex-end; padding: 24px; background: ${currentBg}; border-radius: 12px; transition: background 0.4s ease;">
-        <div style="position: relative;" title="Klik untuk ubah gambar PP playlist">
-          <img id="playlistCoverImg-${id}" src="${playlistCover}" style="width: 180px; height: 180px; border-radius: 8px; object-fit: cover; box-shadow: 0 8px 24px rgba(0,0,0,0.6); cursor: pointer;" onclick="document.getElementById('playlistCoverInput-${id}').click()">
-          <input type="file" id="playlistCoverInput-${id}" accept="image/*" style="display: none;" onchange="uploadPlaylistCover(event, ${id})">
-        </div>
-        <div>
-          <p style="text-transform: uppercase; font-size: 12px; font-weight: 700; color: #fff; margin: 0 0 8px 0;">Public Playlist</p>
-          <h1 style="font-size: 44px; font-weight: 900; color: #fff; margin: 0 0 16px 0; letter-spacing: -1px;">${escapeHtml(pl.name)}</h1>
-          <p style="margin: 0; font-size: 14px; color: #b3b3b3;">
-            <strong style="color:#fff;">Nis Izza</strong> • ${state.activePlaylistSongs.length} songs
-          </p>
+    const detailHtml = `
+      <div class="pl-banner">
+        ${coverImgHtml}
+        <input type="file" id="playlistCoverInput-${id}" accept="image/*" style="display:none;" onchange="uploadPlaylistCover(event, ${id})">
+        <div style="min-width:0;">
+          <p class="pl-eyebrow">Playlist</p>
+          <h1 class="pl-title">${escapeHtml(pl.name)}</h1>
+          <p class="pl-meta"><strong>${state.activePlaylistSongs.length}</strong> lagu ${totalDuration ? `· ${fmtTime(totalDuration)}` : ''}</p>
         </div>
       </div>
 
-      <!-- Action Bar -->
-      <div style="display: flex; align-items: center; gap: 16px; margin: 20px 0;">
-        <button id="bannerPlayBtn" onclick="togglePlayPlaylist()" style="width: 56px; height: 56px; border-radius: 50%; background: #1ed760; border: none; cursor: pointer; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 12px rgba(0,0,0,0.3); transition: transform 0.1s;">
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="#000">${playPauseIcon}</svg>
+      <div class="pl-toolbar">
+        <button class="pl-play-btn" onclick="togglePlayPlaylist()" title="Putar semua">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor">${playPauseIcon}</svg>
         </button>
-        <button onclick="openAddSongModal(${id})" style="background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); color: #fff; padding: 8px 16px; border-radius: 20px; font-weight: 700; cursor: pointer;">+ Add</button>
-        <button onclick="changePlaylistBackground(${id})" style="background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); color: #fff; padding: 8px 16px; border-radius: 20px; font-weight: 700; cursor: pointer;">🎨 Background</button>
-        <button onclick="renamePlaylist(${id}, '${escapeHtml(pl.name).replace(/'/g, "\\'")}')" style="background: transparent; border: 1px solid rgba(255,255,255,0.2); color: #fff; padding: 8px 16px; border-radius: 20px; font-weight: 700; cursor: pointer;">Name & details</button>
-        <button onclick="deletePlaylist(${id})" style="background: transparent; border: none; color: #ff4d4d; font-weight: 700; cursor: pointer; margin-left: auto;">🗑️ Delete</button>
+        <button class="pl-toolbar-btn" onclick="openAddSongModal(${id})">+ Tambah Lagu</button>
+        <button class="pl-toolbar-btn" onclick="renamePlaylist(${id}, '${escapeHtml(pl.name).replace(/'/g, "\\'")}')">Ganti Nama</button>
+        <button class="pl-toolbar-btn danger" onclick="deletePlaylist(${id})">Hapus Playlist</button>
       </div>
 
-      <!-- Tabel Lagu Spotify Style -->
-      <table style="width: 100%; border-collapse: collapse; text-align: left; margin-top: 10px;">
-        <thead>
-          <tr style="border-bottom: 1px solid rgba(255,255,255,0.1); color: #b3b3b3; font-size: 12px; text-transform: uppercase;">
-            <th style="padding: 8px 12px; text-align: center;">#</th>
-            <th style="padding: 8px 12px;">Title</th>
-            <th style="padding: 8px 12px;">Album</th>
-            <th style="padding: 8px 12px;">Date Added</th>
-            <th style="padding: 8px 12px; text-align: right;">🕒</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${tableRowsHtml}
-        </tbody>
-      </table>
+      <div class="track-list">
+        ${state.activePlaylistSongs.length ? `
+        <div class="track-list-head">
+          <div>#</div>
+          <div>Judul</div>
+          <div class="col-album">Album</div>
+          <div style="text-align:right;">Durasi</div>
+        </div>` : ''}
+        ${rowsHtml}
+      </div>
     `;
 
-    details.forEach(el => { el.innerHTML = spotifyViewHtml; });
+    details.forEach(el => { el.innerHTML = detailHtml; });
   } catch (err) {
     console.error('Error memuat detail playlist:', err);
   }
@@ -328,18 +316,6 @@ function togglePlayPlaylist() {
     }
   } else {
     playPlaylistSong(0);
-  }
-}
-
-/* ============ GANTI BACKGROUND BANNER ============ */
-function changePlaylistBackground(playlistId) {
-  const currentIndex = state.playlistBgIndex[playlistId] || 0;
-  const nextIndex = (currentIndex + 1) % GRADIENTS.length;
-  state.playlistBgIndex[playlistId] = nextIndex;
-
-  const banner = document.getElementById(`playlistBanner-${playlistId}`);
-  if (banner) {
-    banner.style.background = GRADIENTS[nextIndex];
   }
 }
 
@@ -368,32 +344,38 @@ async function uploadPlaylistCover(event, playlistId) {
 
 /* ============ MODAL ADD SONG ============ */
 function openAddSongModal(playlistId) {
-  let modal = $('#addSongModal');
-  if (!modal) {
-    modal = document.createElement('div');
-    modal.id = 'addSongModal';
-    modal.style.cssText = 'position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.8); display:flex; align-items:center; justify-content:center; z-index:9999;';
-    document.body.appendChild(modal);
+  let overlay = $('#addSongModal');
+  if (!overlay) {
+    overlay = document.createElement('div');
+    overlay.id = 'addSongModal';
+    overlay.className = 'modal-overlay';
+    overlay.addEventListener('click', (e) => {
+      if (e.target === overlay) overlay.remove();
+    });
+    document.body.appendChild(overlay);
   }
 
   const optionsHtml = state.songs.map(s => `
-    <div onclick="addSongToPlaylist(${playlistId}, ${s.id})" style="display:flex; justify-content:space-between; align-items:center; padding:10px; border-bottom:1px solid #333; cursor:pointer;" class="modal-song-item">
-      <div>
-        <div style="font-weight:bold; color:#fff;">${escapeHtml(s.title)}</div>
-        <div style="font-size:12px; color:#aaa;">${escapeHtml(s.artist)}</div>
+    <div class="modal-song-row" onclick="addSongToPlaylist(${playlistId}, ${s.id})">
+      <div class="modal-song-info">
+        ${s.cover ? `<img class="modal-song-thumb" src="${s.cover}" alt="">` : `<div class="modal-song-thumb"></div>`}
+        <div style="min-width:0;">
+          <div class="modal-song-title">${escapeHtml(s.title)}</div>
+          <div class="modal-song-artist">${escapeHtml(s.artist)}</div>
+        </div>
       </div>
-      <button style="background:#1ed760; color:#000; border:none; padding:6px 12px; border-radius:12px; font-weight:bold; cursor:pointer;">+ Add</button>
+      <button class="modal-add-btn">+ Add</button>
     </div>
   `).join('');
 
-  modal.innerHTML = `
-    <div style="background:#181818; width:90%; max-width:500px; padding:20px; border-radius:12px; box-shadow:0 10px 30px rgba(0,0,0,0.5);">
-      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
-        <h3 style="margin:0; color:#fff;">Tambahkan Lagu ke Playlist</h3>
-        <button onclick="$('#addSongModal').remove()" style="background:none; border:none; color:#fff; font-size:20px; cursor:pointer;">✕</button>
+  overlay.innerHTML = `
+    <div class="modal-box">
+      <div class="modal-head">
+        <h3>Tambahkan Lagu ke Playlist</h3>
+        <button class="modal-close" onclick="$('#addSongModal').remove()">✕</button>
       </div>
-      <div style="max-height:300px; overflow-y:auto;">
-        ${optionsHtml.length ? optionsHtml : '<p style="color:#aaa;">Belum ada lagu terdaftar.</p>'}
+      <div class="modal-list">
+        ${optionsHtml.length ? optionsHtml : '<p class="modal-empty">Belum ada lagu terdaftar.</p>'}
       </div>
     </div>
   `;
