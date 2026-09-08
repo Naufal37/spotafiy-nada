@@ -258,7 +258,7 @@ async function renderPlaylists() {
     const initials = (p.name || '?').trim().charAt(0).toUpperCase();
     const coverInner = p.cover
       ? `<img class="playlist-item-cover" src="${p.cover}" alt="">`
-      : `<div class="playlist-item-cover" style="display:flex;align-items:center;justify-content:center;font-family:'Sora',sans-serif;font-weight:800;color:var(--muted);">${initials}</div>`;
+      : `<div class="playlist-item-cover" style="display:flex;align-items:center;justify-content:center;font-family:var(--font-ui);font-weight:800;color:var(--muted);">${initials}</div>`;
     return `
       <div class="playlist-item ${state.activePlaylistId === p.id ? 'active' : ''}" onclick="selectPlaylist(${p.id})">
         ${coverInner}
@@ -332,7 +332,7 @@ async function selectPlaylist(id) {
     
     const coverImgHtml = playlistCover
       ? `<img class="pl-banner-cover" id="playlistCoverImg-${id}" src="${playlistCover}" alt="" ${coverClickAttr}>`
-      : `<div class="pl-banner-cover" id="playlistCoverImg-${id}" ${coverClickAttr} style="display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#2A2338,#1A1624);font-family:'Sora',sans-serif;font-weight:800;font-size:40px;color:var(--muted);${isAdmin ? 'cursor:pointer;' : ''}">${escapeHtml((pl.name||'?').trim().charAt(0).toUpperCase())}</div>`;
+      : `<div class="pl-banner-cover" id="playlistCoverImg-${id}" ${coverClickAttr} style="display:flex;align-items:center;justify-content:center;background:var(--bg-card-h);font-family:var(--font-ui);font-weight:800;font-size:40px;color:var(--muted);${isAdmin ? 'cursor:pointer;' : ''}">${escapeHtml((pl.name||'?').trim().charAt(0).toUpperCase())}</div>`;
 
     const totalDuration = state.activePlaylistSongs.reduce((sum, s) => sum + (s.duration || 0), 0);
 
