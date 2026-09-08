@@ -305,12 +305,24 @@ async function selectPlaylist(id) {
       if (songsErr) throw songsErr;
       state.activePlaylistSongs = songsData || [];
 
-      // Ambil durasi secara dinamis jika di database belum tersimpan (durasi === 0)
-      for (let s of state.activePlaylistSongs) {
-        if (!s.duration || s.duration === 0) {
-          s.duration = await fetchAudioDurationFromUrl(s.src);
+      // Ambil durasi secara paralel agar membuka playlist tidak menunggu satu per satu.
+      // Durasi disimpan di cache browser selama sesi ini supaya playlist yang sama
+      // tidak perlu mengambil metadata audio lagi.
+      const durationTasks = state.activePlaylistSongs.map(async (s) => {
+        if (s.duration && s.duration > 0) return;
+        if (!window.nadaDurationCache) window.nadaDurationCache = new Map();
+
+        if (window.nadaDurationCache.has(s.id)) {
+          s.duration = window.nadaDurationCache.get(s.id);
+          return;
         }
-      }
+
+        const duration = await fetchAudioDurationFromUrl(s.src);
+        s.duration = duration;
+        window.nadaDurationCache.set(s.id, duration);
+      });
+
+      await Promise.all(durationTasks);
     } else {
       state.activePlaylistSongs = [];
     }
@@ -713,11 +725,20 @@ function showSection(name) {
 
   $$('.nav-link').forEach(link => link.classList.toggle('active', link.dataset.section === name));
 }
+// Navigasi desktop + menu hamburger di HP
 $$('.nav-link').forEach(link => {
   link.addEventListener('click', (e) => {
     e.preventDefault();
     showSection(link.dataset.section);
+
+    // Tutup menu mobile setelah memilih halaman.
+    $('#navLinks')?.classList.remove('open');
   });
+});
+
+$('#hamburgerBtn')?.addEventListener('click', (e) => {
+  e.stopPropagation();
+  $('#navLinks')?.classList.toggle('open');
 });
 
 /* ============ PLAYER CORE ============ */
