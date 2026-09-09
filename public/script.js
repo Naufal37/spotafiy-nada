@@ -17,7 +17,9 @@ const state = {
   shuffle: false,
   repeat: false,
   activePlaylistId: null,
-  activePlaylistSongs: []
+  activePlaylistSongs: [],
+  isAdmin: false,
+  playlistSongsCache: new Map()
 };
 
 /* ============ DOM SHORTCUTS ============ */
@@ -260,7 +262,7 @@ async function renderPlaylists() {
       ? `<img class="playlist-item-cover" src="${p.cover}" alt="">`
       : `<div class="playlist-item-cover" style="display:flex;align-items:center;justify-content:center;font-family:var(--font-ui);font-weight:800;color:var(--muted);">${initials}</div>`;
     return `
-      <div class="playlist-item ${state.activePlaylistId === p.id ? 'active' : ''}" onclick="selectPlaylist(${p.id})">
+      <div class="playlist-item ${state.activePlaylistId === p.id ? 'active' : ''}" data-id="${p.id}" onclick="selectPlaylist(${p.id})">
         ${coverInner}
         <div style="min-width:0;">
           <div class="playlist-item-name">${escapeHtml(p.name)}</div>
@@ -273,20 +275,179 @@ async function renderPlaylists() {
   if (homeList) homeList.innerHTML = htmlContent;
 }
 
+function renderPlaylistDetailHTML(pl, songs, isAdmin) {
+  const id = pl.id;
+  const playlistCover = pl.cover || '';
+  const coverClickAttr = isAdmin ? `title="Klik untuk ganti sampul" onclick="document.getElementById('playlistCoverInput-${id}').click()"` : '';
+  
+  const coverImgHtml = playlistCover
+    ? `<img class="pl-banner-cover" id="playlistCoverImg-${id}" src="${playlistCover}" alt="" ${coverClickAttr}>`
+    : `<div class="pl-banner-cover" id="playlistCoverImg-${id}" ${coverClickAttr} style="display:flex;align-items:center;justify-content:center;background:var(--bg-card-h);font-family:var(--font-ui);font-weight:800;font-size:40px;color:var(--muted);${isAdmin ? 'cursor:pointer;' : ''}">${escapeHtml((pl.name||'?').trim().charAt(0).toUpperCase())}</div>`;
+
+  const totalDuration = songs.reduce((sum, s) => sum + (s.duration || 0), 0);
+
+  const rowsHtml = songs.length === 0
+    ? `<div class="track-list-empty" style="padding:24px 0; color:var(--muted); font-size:14px;">Playlist ini masih kosong.</div>`
+    : songs.map((s, index) => {
+        const isThisPlaying = state.currentId === s.id && state.isPlaying;
+        const numOrEq = isThisPlaying
+          ? `<span class="eq-bars"><span></span><span></span><span></span></span>`
+          : String(index + 1).padStart(2, '0');
+        return `
+          <div class="track-row ${isThisPlaying ? 'playing' : ''}" data-song-id="${s.id}" data-index="${index}" onclick="playPlaylistSong(${index})">
+            <div class="track-num">${numOrEq}</div>
+            <div class="track-info">
+              ${s.cover ? `<img class="track-thumb" src="${s.cover}" alt="">` : `<div class="track-thumb"></div>`}
+              <div class="track-text">
+                <div class="track-title">${escapeHtml(s.title)}</div>
+                <div class="track-artist">${escapeHtml(s.artist)}</div>
+              </div>
+            </div>
+            <div class="track-album">${escapeHtml(s.album || s.title)}</div>
+            <div class="track-time">
+              <span class="track-time-text">${fmtTime(s.duration || 0)}</span>
+              ${isAdmin ? `
+              <button class="track-remove" onclick="event.stopPropagation(); removeSongFromPlaylist(${id}, ${s.id})" title="Hapus dari playlist">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0-1 14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2L4 6h16z"/></svg>
+              </button>` : ''}
+            </div>
+          </div>
+        `;
+      }).join('');
+
+  const playPauseIcon = (state.isPlaying && songs.some(s => s.id === state.currentId))
+    ? `<path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/>`
+    : `<path d="M8 5v14l11-7z"/>`;
+
+  const adminButtonsHtml = isAdmin ? `
+    <button class="pl-toolbar-btn" onclick="openAddSongModal(${id})">+ Tambah Lagu</button>
+    <button class="pl-toolbar-btn" onclick="renamePlaylist(${id}, '${escapeHtml(pl.name).replace(/'/g, "\\'")}')">Ganti Nama</button>
+    <button class="pl-toolbar-btn danger" onclick="deletePlaylist(${id})">Hapus Playlist</button>
+  ` : '';
+
+  return `
+    <div class="pl-banner">
+      ${coverImgHtml}
+      ${isAdmin ? `<input type="file" id="playlistCoverInput-${id}" accept="image/*" style="display:none;" onchange="uploadPlaylistCover(event, ${id})">` : ''}
+      <div style="min-width:0;">
+        <p class="pl-eyebrow">Playlist</p>
+        <h1 class="pl-title">${escapeHtml(pl.name)}</h1>
+        <p class="pl-meta"><strong>${songs.length}</strong> lagu ${totalDuration ? `· ${fmtTime(totalDuration)}` : ''}</p>
+      </div>
+    </div>
+
+    <div class="pl-toolbar">
+      <button class="pl-play-btn" onclick="togglePlayPlaylist()" title="Putar semua">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor">${playPauseIcon}</svg>
+      </button>
+      ${adminButtonsHtml}
+    </div>
+
+    <div class="track-list">
+      ${songs.length ? `
+      <div class="track-list-head">
+        <div>#</div>
+        <div>Judul</div>
+        <div class="col-album">Album</div>
+        <div style="text-align:right;">Durasi</div>
+      </div>` : ''}
+      ${rowsHtml}
+    </div>
+  `;
+}
+
+// Background duration resolution (non-blocking)
+function triggerBackgroundDurations(playlistId, songs) {
+  if (!window.nadaDurationCache) window.nadaDurationCache = new Map();
+
+  songs.forEach(async (s) => {
+    if (s.duration && s.duration > 0) return;
+
+    if (window.nadaDurationCache.has(s.id)) {
+      s.duration = window.nadaDurationCache.get(s.id);
+      updateTrackDurationInDOM(s.id, s.duration);
+      return;
+    }
+
+    const duration = await fetchAudioDurationFromUrl(s.src);
+    if (duration && duration > 0) {
+      s.duration = duration;
+      window.nadaDurationCache.set(s.id, duration);
+      if (state.activePlaylistId === playlistId) {
+        updateTrackDurationInDOM(s.id, duration);
+      }
+    }
+  });
+}
+
+function updateTrackDurationInDOM(songId, duration) {
+  document.querySelectorAll(`.track-row[data-song-id="${songId}"] .track-time-text`).forEach(el => {
+    el.textContent = fmtTime(duration);
+  });
+}
+
+function updatePlaylistPlayState() {
+  if (!state.activePlaylistSongs || !state.activePlaylistSongs.length) return;
+  const isPlaylistSongPlaying = state.isPlaying && state.activePlaylistSongs.some(s => s.id === state.currentId);
+  const playIcon = `<path d="M8 5v14l11-7z"/>`;
+  const pauseIcon = `<path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/>`;
+
+  document.querySelectorAll('.pl-play-btn svg').forEach(svg => {
+    svg.innerHTML = isPlaylistSongPlaying ? pauseIcon : playIcon;
+  });
+
+  document.querySelectorAll('.track-row').forEach(row => {
+    const songId = Number(row.dataset.songId);
+    const isThisPlaying = songId === state.currentId && state.isPlaying;
+    row.classList.toggle('playing', isThisPlaying);
+    const numEl = row.querySelector('.track-num');
+    if (numEl) {
+      const idx = Number(row.dataset.index);
+      numEl.innerHTML = isThisPlaying
+        ? `<span class="eq-bars"><span></span><span></span><span></span></span>`
+        : String(idx + 1).padStart(2, '0');
+    }
+  });
+}
+
 async function selectPlaylist(id) {
   state.activePlaylistId = id;
   const pl = state.playlists.find(p => p.id === id);
   if (!pl) return;
+
+  // 1. Seketika update highlight aktif di list playlist (0ms feedback)
+  document.querySelectorAll('.playlist-item').forEach(el => {
+    el.classList.toggle('active', Number(el.dataset.id) === Number(id));
+  });
 
   const details = [
     $('#playlistDetail'),
     $('#playlistDetailHome')
   ].filter(Boolean);
 
-  try {
-    const { data: { user } } = await supabaseClient.auth.getUser();
-    const isAdmin = !!user;
+  const isAdmin = state.isAdmin;
 
+  // 2. Jika sudah ada di cache memori, render LANGSUNG tanpa jeda (0ms)
+  if (state.playlistSongsCache.has(id)) {
+    state.activePlaylistSongs = state.playlistSongsCache.get(id);
+    const html = renderPlaylistDetailHTML(pl, state.activePlaylistSongs, isAdmin);
+    details.forEach(el => { el.innerHTML = html; });
+    triggerBackgroundDurations(id, state.activePlaylistSongs);
+    return;
+  }
+
+  // 3. Tampilkan spinner animasi seketika agar tidak freeze
+  details.forEach(el => {
+    el.innerHTML = `
+      <div class="playlist-loading">
+        <div class="spinner"></div>
+        <p>Memuat playlist...</p>
+      </div>
+    `;
+  });
+
+  try {
+    // 4. Ambil relasi playlist_songs dari Supabase
     const { data: relations, error: relErr } = await supabaseClient
       .from('playlist_songs')
       .select('song_id')
@@ -294,120 +455,44 @@ async function selectPlaylist(id) {
 
     if (relErr) throw relErr;
 
+    // Jika user sudah ganti playlist lain saat fetch selesai, abaikan
+    if (state.activePlaylistId !== id) return;
+
     const songIds = (relations || []).map(r => r.song_id);
-    
-    if (songIds.length > 0) {
-      const { data: songsData, error: songsErr } = await supabaseClient
+
+    // 5. Cari lagu dari state.songs di memori (sangat cepat, tanpa roundtrip ekstra)
+    let songsData = songIds.map(sid => state.songs.find(s => s.id === sid)).filter(Boolean);
+
+    // Fallback jika ada lagu yang belum ada di memori
+    const missingIds = songIds.filter(sid => !state.songs.some(s => s.id === sid));
+    if (missingIds.length > 0) {
+      const { data: fetchedMissing } = await supabaseClient
         .from('songs')
         .select('*')
-        .in('id', songIds);
-      
-      if (songsErr) throw songsErr;
-      state.activePlaylistSongs = songsData || [];
-
-      // Ambil durasi secara paralel agar membuka playlist tidak menunggu satu per satu.
-      // Durasi disimpan di cache browser selama sesi ini supaya playlist yang sama
-      // tidak perlu mengambil metadata audio lagi.
-      const durationTasks = state.activePlaylistSongs.map(async (s) => {
-        if (s.duration && s.duration > 0) return;
-        if (!window.nadaDurationCache) window.nadaDurationCache = new Map();
-
-        if (window.nadaDurationCache.has(s.id)) {
-          s.duration = window.nadaDurationCache.get(s.id);
-          return;
-        }
-
-        const duration = await fetchAudioDurationFromUrl(s.src);
-        s.duration = duration;
-        window.nadaDurationCache.set(s.id, duration);
-      });
-
-      await Promise.all(durationTasks);
-    } else {
-      state.activePlaylistSongs = [];
+        .in('id', missingIds);
+      if (fetchedMissing && fetchedMissing.length) {
+        fetchedMissing.forEach(s => {
+          if (!state.songs.some(ex => ex.id === s.id)) state.songs.push(s);
+        });
+        songsData = songIds.map(sid => state.songs.find(s => s.id === sid)).filter(Boolean);
+      }
     }
 
-    const playlistCover = pl.cover || '';
-    const coverClickAttr = isAdmin ? `title="Klik untuk ganti sampul" onclick="document.getElementById('playlistCoverInput-${id}').click()"` : '';
-    
-    const coverImgHtml = playlistCover
-      ? `<img class="pl-banner-cover" id="playlistCoverImg-${id}" src="${playlistCover}" alt="" ${coverClickAttr}>`
-      : `<div class="pl-banner-cover" id="playlistCoverImg-${id}" ${coverClickAttr} style="display:flex;align-items:center;justify-content:center;background:var(--bg-card-h);font-family:var(--font-ui);font-weight:800;font-size:40px;color:var(--muted);${isAdmin ? 'cursor:pointer;' : ''}">${escapeHtml((pl.name||'?').trim().charAt(0).toUpperCase())}</div>`;
+    state.activePlaylistSongs = songsData;
+    state.playlistSongsCache.set(id, songsData);
 
-    const totalDuration = state.activePlaylistSongs.reduce((sum, s) => sum + (s.duration || 0), 0);
-
-    const rowsHtml = state.activePlaylistSongs.length === 0
-      ? `<div class="track-list-empty">Playlist ini masih kosong.</div>`
-      : state.activePlaylistSongs.map((s, index) => {
-          const isThisPlaying = state.currentId === s.id && state.isPlaying;
-          const numOrEq = isThisPlaying
-            ? `<span class="eq-bars"><span></span><span></span><span></span></span>`
-            : String(index + 1).padStart(2, '0');
-          return `
-            <div class="track-row ${isThisPlaying ? 'playing' : ''}" onclick="playPlaylistSong(${index})">
-              <div class="track-num">${numOrEq}</div>
-              <div class="track-info">
-                ${s.cover ? `<img class="track-thumb" src="${s.cover}" alt="">` : `<div class="track-thumb"></div>`}
-                <div class="track-text">
-                  <div class="track-title">${escapeHtml(s.title)}</div>
-                  <div class="track-artist">${escapeHtml(s.artist)}</div>
-                </div>
-              </div>
-              <div class="track-album">${escapeHtml(s.album || s.title)}</div>
-              <div class="track-time">
-                ${fmtTime(s.duration || 0)}
-                ${isAdmin ? `
-                <button class="track-remove" onclick="event.stopPropagation(); removeSongFromPlaylist(${id}, ${s.id})" title="Hapus dari playlist">
-                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0-1 14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2L4 6h16z"/></svg>
-                </button>` : ''}
-              </div>
-            </div>
-          `;
-        }).join('');
-
-    const playPauseIcon = (state.isPlaying && state.activePlaylistSongs.some(s => s.id === state.currentId))
-      ? `<path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/>`
-      : `<path d="M8 5v14l11-7z"/>`;
-
-    const adminButtonsHtml = isAdmin ? `
-      <button class="pl-toolbar-btn" onclick="openAddSongModal(${id})">+ Tambah Lagu</button>
-      <button class="pl-toolbar-btn" onclick="renamePlaylist(${id}, '${escapeHtml(pl.name).replace(/'/g, "\\'")}')">Ganti Nama</button>
-      <button class="pl-toolbar-btn danger" onclick="deletePlaylist(${id})">Hapus Playlist</button>
-    ` : '';
-
-    const detailHtml = `
-      <div class="pl-banner">
-        ${coverImgHtml}
-        ${isAdmin ? `<input type="file" id="playlistCoverInput-${id}" accept="image/*" style="display:none;" onchange="uploadPlaylistCover(event, ${id})">` : ''}
-        <div style="min-width:0;">
-          <p class="pl-eyebrow">Playlist</p>
-          <h1 class="pl-title">${escapeHtml(pl.name)}</h1>
-          <p class="pl-meta"><strong>${state.activePlaylistSongs.length}</strong> lagu ${totalDuration ? `· ${fmtTime(totalDuration)}` : ''}</p>
-        </div>
-      </div>
-
-      <div class="pl-toolbar">
-        <button class="pl-play-btn" onclick="togglePlayPlaylist()" title="Putar semua">
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor">${playPauseIcon}</svg>
-        </button>
-        ${adminButtonsHtml}
-      </div>
-
-      <div class="track-list">
-        ${state.activePlaylistSongs.length ? `
-        <div class="track-list-head">
-          <div>#</div>
-          <div>Judul</div>
-          <div class="col-album">Album</div>
-          <div style="text-align:right;">Durasi</div>
-        </div>` : ''}
-        ${rowsHtml}
-      </div>
-    `;
-
+    // 6. Langsung render playlist ke layar seketika!
+    const detailHtml = renderPlaylistDetailHTML(pl, state.activePlaylistSongs, isAdmin);
     details.forEach(el => { el.innerHTML = detailHtml; });
+
+    // 7. Ambil durasi di background secara asinkron TANPA menahan tampilan
+    triggerBackgroundDurations(id, state.activePlaylistSongs);
+
   } catch (err) {
     console.error('Error memuat detail playlist:', err);
+    details.forEach(el => {
+      el.innerHTML = '<p class="empty-msg" style="color:#ff6b6b;">Gagal memuat playlist.</p>';
+    });
   }
 }
 
@@ -452,6 +537,7 @@ async function uploadPlaylistCover(event, playlistId) {
 
     if (updateErr) throw updateErr;
 
+    state.playlistSongsCache.delete(playlistId);
     await renderPlaylists();
     await selectPlaylist(playlistId);
   } catch (err) {
@@ -505,6 +591,7 @@ async function addSongToPlaylist(playlistId, songId) {
 
     if (error) throw error;
 
+    state.playlistSongsCache.delete(playlistId);
     if ($('#addSongModal')) $('#addSongModal').remove();
     await selectPlaylist(playlistId);
   } catch (err) {
@@ -522,6 +609,7 @@ async function removeSongFromPlaylist(playlistId, songId) {
 
     if (error) throw error;
 
+    state.playlistSongsCache.delete(playlistId);
     await selectPlaylist(playlistId);
   } catch (err) {
     console.error('Gagal menghapus lagu dari playlist:', err);
@@ -548,6 +636,7 @@ async function renamePlaylist(id, oldName) {
 
     if (error) throw error;
 
+    state.playlistSongsCache.delete(id);
     await renderPlaylists();
     await selectPlaylist(id);
   } catch (err) {
@@ -566,6 +655,7 @@ async function deletePlaylist(id) {
 
     if (error) throw error;
 
+    state.playlistSongsCache.delete(id);
     state.activePlaylistId = null;
     await renderPlaylists();
 
@@ -721,24 +811,63 @@ function refreshAllRenders() {
 function showSection(name) {
   $$('.page-section').forEach(sec => sec.classList.remove('active'));
   const target = $(`#section-${name}`);
-  if (target) target.classList.add('active'); // Tambahkan tanda kurung ')' sebelum ';'
+  if (target) target.classList.add('active');
 
   $$('.nav-link').forEach(link => link.classList.toggle('active', link.dataset.section === name));
 }
-// Navigasi desktop + menu hamburger di HP
+
+function openMobileNav() {
+  $('#navLinks')?.classList.add('open');
+  $('#navBackdrop')?.classList.add('open');
+  document.body.style.overflow = 'hidden';
+}
+
+function closeMobileNav() {
+  $('#navLinks')?.classList.remove('open');
+  $('#navBackdrop')?.classList.remove('open');
+  document.body.style.overflow = '';
+}
+
+function showLoginPrompt(message) {
+  const notice = $('#loginModalNotice');
+  if (notice) {
+    notice.textContent = message || '';
+    notice.style.display = message ? 'block' : 'none';
+  }
+  if ($('#loginModal')) $('#loginModal').style.display = 'flex';
+}
+
+// Navigasi desktop + menu mobile di HP
 $$('.nav-link').forEach(link => {
   link.addEventListener('click', (e) => {
     e.preventDefault();
-    showSection(link.dataset.section);
+    const section = link.dataset.section;
 
-    // Tutup menu mobile setelah memilih halaman.
-    $('#navLinks')?.classList.remove('open');
+    // Jika pengguna menekan "+ Tambah Lagu" dan belum login admin, buka popup login secara ramah
+    if (section === 'tambah' && !state.isAdmin) {
+      closeMobileNav();
+      window._pendingSectionAfterLogin = 'tambah';
+      showLoginPrompt('Fitur Tambah Lagu memerlukan login Admin. Silakan login terlebih dahulu.');
+      return;
+    }
+
+    showSection(section);
+    closeMobileNav();
   });
 });
 
 $('#hamburgerBtn')?.addEventListener('click', (e) => {
   e.stopPropagation();
-  $('#navLinks')?.classList.toggle('open');
+  openMobileNav();
+});
+
+$('#navCloseBtn')?.addEventListener('click', (e) => {
+  e.stopPropagation();
+  closeMobileNav();
+});
+
+$('#navBackdrop')?.addEventListener('click', () => {
+  closeMobileNav();
 });
 
 /* ============ PLAYER CORE ============ */
@@ -910,7 +1039,7 @@ audioEl?.addEventListener('play', () => {
   if (playerCover) playerCover.classList.add('playing-spin');
 
   refreshAllRenders();
-  if (state.activePlaylistId) selectPlaylist(state.activePlaylistId);
+  updatePlaylistPlayState();
 });
 
 audioEl?.addEventListener('pause', () => {
@@ -921,7 +1050,7 @@ audioEl?.addEventListener('pause', () => {
   if (playerCover) playerCover.classList.remove('playing-spin');
 
   refreshAllRenders();
-  if (state.activePlaylistId) selectPlaylist(state.activePlaylistId);
+  updatePlaylistPlayState();
 });
 
 audioEl?.addEventListener('ended', () => {
@@ -971,18 +1100,32 @@ document.addEventListener('DOMContentLoaded', init);
 /* ============ ADMIN AUTHENTICATION ============ */
 const loginBtn = document.getElementById('adminLoginBtn');
 const logoutBtn = document.getElementById('adminLogoutBtn');
+const loginBtnMobile = document.getElementById('adminLoginBtnMobile');
+const logoutBtnMobile = document.getElementById('adminLogoutBtnMobile');
 const loginModal = document.getElementById('loginModal');
 const closeLoginBtn = document.getElementById('closeLoginBtn');
 const submitLoginBtn = document.getElementById('submitLoginBtn');
 const navTambahLagu = document.querySelector('[data-section="tambah"]');
 
 async function checkAdminAuth() {
-  const { data: { user } } = await supabaseClient.auth.getUser();
-  const isAdmin = !!user;
+  try {
+    const { data: { user } } = await supabaseClient.auth.getUser();
+    state.isAdmin = !!user;
+  } catch (err) {
+    state.isAdmin = false;
+  }
+  const isAdmin = state.isAdmin;
 
+  // Tombol navigasi Desktop
   if (loginBtn) loginBtn.style.display = isAdmin ? 'none' : 'inline-block';
   if (logoutBtn) logoutBtn.style.display = isAdmin ? 'inline-block' : 'none';
-  if (navTambahLagu) navTambahLagu.style.display = isAdmin ? 'inline-block' : 'none';
+
+  // Tombol navigasi Mobile (di dalam drawer)
+  if (loginBtnMobile) loginBtnMobile.style.display = isAdmin ? 'none' : 'block';
+  if (logoutBtnMobile) logoutBtnMobile.style.display = isAdmin ? 'block' : 'none';
+
+  // Penting: Menu "+ Tambah Lagu" selalu dapat diakses di navbar/drawer!
+  if (navTambahLagu) navTambahLagu.style.display = '';
 
   const formHome = $('#newPlaylistFormHome');
   const formPage = $('#newPlaylistForm');
@@ -996,31 +1139,88 @@ async function checkAdminAuth() {
 
 checkAdminAuth();
 
-if (loginBtn) loginBtn.onclick = () => loginModal.style.display = 'flex';
-if (closeLoginBtn) closeLoginBtn.onclick = () => loginModal.style.display = 'none';
+// Supabase Auth State Change Listener
+supabaseClient.auth.onAuthStateChange((event, session) => {
+  state.isAdmin = !!session?.user;
+});
+
+if (loginBtn) {
+  loginBtn.onclick = () => {
+    const notice = $('#loginModalNotice');
+    if (notice) notice.style.display = 'none';
+    loginModal.style.display = 'flex';
+  };
+}
+
+if (loginBtnMobile) {
+  loginBtnMobile.onclick = () => {
+    closeMobileNav();
+    const notice = $('#loginModalNotice');
+    if (notice) notice.style.display = 'none';
+    loginModal.style.display = 'flex';
+  };
+}
+
+if (closeLoginBtn) {
+  closeLoginBtn.onclick = () => {
+    loginModal.style.display = 'none';
+    window._pendingSectionAfterLogin = null;
+    const notice = $('#loginModalNotice');
+    if (notice) notice.style.display = 'none';
+  };
+}
 
 if (submitLoginBtn) {
   submitLoginBtn.onclick = async () => {
     const email = document.getElementById('adminEmail').value;
     const password = document.getElementById('adminPassword').value;
     
+    if (!email || !password) {
+      alert('Masukkan email dan password admin!');
+      return;
+    }
+
+    submitLoginBtn.disabled = true;
+    submitLoginBtn.textContent = 'Memverifikasi...';
+
     const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password });
+    submitLoginBtn.disabled = false;
+    submitLoginBtn.textContent = 'Login';
+
     if (error) {
       alert('Login Gagal: ' + error.message);
     } else {
       loginModal.style.display = 'none';
       await checkAdminAuth();
+      state.playlistSongsCache.clear();
       if (state.activePlaylistId) selectPlaylist(state.activePlaylistId);
+
+      // Jika sebelumnya user bermaksud membuka Tambah Lagu:
+      if (window._pendingSectionAfterLogin) {
+        showSection(window._pendingSectionAfterLogin);
+        window._pendingSectionAfterLogin = null;
+      }
       alert('Berhasil Login sebagai Admin!');
     }
   };
 }
 
-if (logoutBtn) {
-  logoutBtn.onclick = async () => {
-    await supabaseClient.auth.signOut();
-    await checkAdminAuth();
-    if (state.activePlaylistId) selectPlaylist(state.activePlaylistId);
-    alert('Berhasil Logout!');
+async function handleLogout() {
+  await supabaseClient.auth.signOut();
+  await checkAdminAuth();
+  state.playlistSongsCache.clear();
+  if (state.activePlaylistId) selectPlaylist(state.activePlaylistId);
+  const activeSection = document.querySelector('.page-section.active');
+  if (activeSection && activeSection.id === 'section-tambah') {
+    showSection('beranda');
+  }
+  alert('Berhasil Logout!');
+}
+
+if (logoutBtn) logoutBtn.onclick = handleLogout;
+if (logoutBtnMobile) {
+  logoutBtnMobile.onclick = async () => {
+    closeMobileNav();
+    await handleLogout();
   };
 }
