@@ -1,20 +1,35 @@
 const fs = require('fs');
 const path = require('path');
+const os = require('os');
 
 /* ==========================================================
-   NADA — JSON File Database
-   Ganti dari SQLite ke penyimpanan file JSON supaya gak butuh
-   build tools C++ di Windows, tapi tetap PERSISTEN (gak ilang
-   tiap restart server kayak versi lama).
+   NADA — JSON File Database (Vercel Ready)
    ========================================================== */
 
 const DATA_DIR = path.join(__dirname, 'data');
 const SONGS_FILE = path.join(DATA_DIR, 'songs.json');
 const PLAYLISTS_FILE = path.join(DATA_DIR, 'playlists.json');
 
-if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
+// Folder data fallback di /tmp untuk environment serverless Vercel (read-only)
+const TMP_DATA_DIR = path.join(os.tmpdir(), 'nada-data');
 
-// Data awal (dipakai cuma sekali, waktu songs.json belum ada sama sekali)
+try {
+  if (!fs.existsSync(DATA_DIR)) {
+    fs.mkdirSync(DATA_DIR, { recursive: true });
+  }
+} catch (e) {
+  // Silent fail di serverless read-only environment
+}
+
+try {
+  if (!fs.existsSync(TMP_DATA_DIR)) {
+    fs.mkdirSync(TMP_DATA_DIR, { recursive: true });
+  }
+} catch (e) {
+  // Silent fail
+}
+
+// Data awal
 const DEFAULT_SONGS = [
   { id: 1, title: "Style", artist: "Hearts2Hearts", src: "/uploads/music/audio-1787649929001-275865192.mp3", cover: "/uploads/covers/cover-1787649929171-527971163.jpg", isFavorite: false, album: "Style", duration: 210, date_added: "2026-08-20" },
   { id: 2, title: "FOCUS", artist: "Hearts2Hearts", src: "/uploads/music/audio-1787649893142-429282888.mp3", cover: "/uploads/covers/cover-1787649893183-873762554.jpg", isFavorite: false, album: "FOCUS", duration: 210, date_added: "2026-08-20" },
@@ -28,24 +43,40 @@ const DEFAULT_SONGS = [
 
 function loadJSON(file, fallback) {
   try {
-    if (!fs.existsSync(file)) {
-      saveJSON(file, fallback);
-      return JSON.parse(JSON.stringify(fallback));
+    // 1. Cek file utama di data/
+    if (fs.existsSync(file)) {
+      const raw = fs.readFileSync(file, 'utf-8');
+      if (raw && raw.trim()) return JSON.parse(raw);
     }
-    const raw = fs.readFileSync(file, 'utf-8');
-    return raw.trim() ? JSON.parse(raw) : fallback;
+    // 2. Cek file temporary di /tmp jika pernah disimpan di serverless session
+    const fileName = path.basename(file);
+    const tmpFile = path.join(TMP_DATA_DIR, fileName);
+    if (fs.existsSync(tmpFile)) {
+      const raw = fs.readFileSync(tmpFile, 'utf-8');
+      if (raw && raw.trim()) return JSON.parse(raw);
+    }
   } catch (err) {
     console.error(`Gagal membaca ${file}:`, err.message);
-    return fallback;
   }
+  return fallback;
 }
 
 function saveJSON(file, data) {
-  fs.writeFileSync(file, JSON.stringify(data, null, 2), 'utf-8');
+  try {
+    fs.writeFileSync(file, JSON.stringify(data, null, 2), 'utf-8');
+  } catch (err) {
+    // Kalau read-only filesystem (seperti di Vercel), simpan ke /tmp
+    try {
+      const fileName = path.basename(file);
+      const tmpFile = path.join(TMP_DATA_DIR, fileName);
+      fs.writeFileSync(tmpFile, JSON.stringify(data, null, 2), 'utf-8');
+    } catch (e) {
+      console.error(`Gagal menyimpan ${file}:`, e.message);
+    }
+  }
 }
 
 let songs = loadJSON(SONGS_FILE, DEFAULT_SONGS);
-// Struktur playlist: { id, name, cover, songIds: [1, 2, 3] }
 let playlists = loadJSON(PLAYLISTS_FILE, []);
 
 function saveSongs() { saveJSON(SONGS_FILE, songs); }
@@ -90,7 +121,6 @@ module.exports = {
     const idx = songs.findIndex(s => s.id === Number(id));
     if (idx === -1) return false;
     songs.splice(idx, 1);
-    // Bersihin juga referensinya dari semua playlist
     playlists.forEach(p => {
       p.songIds = p.songIds.filter(sid => sid !== Number(id));
     });

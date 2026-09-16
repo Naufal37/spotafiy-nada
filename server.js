@@ -1,6 +1,7 @@
 const express = require('express');
 const path = require('path');
 const fs = require('fs');
+const os = require('os');
 const multer = require('multer');
 const db = require('./db');
 
@@ -15,18 +16,41 @@ app.use(express.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname, 'public')));
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
-// Pastikan folder upload ada
+// Pastikan folder upload ada (aman dari crash Vercel read-only filesystem)
 const MUSIC_DIR = path.join(__dirname, 'uploads', 'music');
 const COVERS_DIR = path.join(__dirname, 'uploads', 'covers');
 [MUSIC_DIR, COVERS_DIR].forEach(dir => {
-  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+  try {
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+  } catch (e) {}
 });
 
+const TMP_MUSIC_DIR = path.join(os.tmpdir(), 'uploads', 'music');
+const TMP_COVERS_DIR = path.join(os.tmpdir(), 'uploads', 'covers');
+[TMP_MUSIC_DIR, TMP_COVERS_DIR].forEach(dir => {
+  try {
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+  } catch (e) {}
+});
+
+// Serve file upload temporary dari /tmp jika di-upload di Vercel
+app.use('/uploads/music', express.static(TMP_MUSIC_DIR));
+app.use('/uploads/covers', express.static(TMP_COVERS_DIR));
+
 /* ============ MULTER (UPLOAD FILE) ============ */
-// Upload lagu baru: butuh audio (wajib) + cover (opsional)
 const songStorage = multer.diskStorage({
   destination: (req, file, cb) => {
-    cb(null, file.fieldname === 'cover' ? COVERS_DIR : MUSIC_DIR);
+    let target = file.fieldname === 'cover' ? COVERS_DIR : MUSIC_DIR;
+    try {
+      if (!fs.existsSync(target)) fs.mkdirSync(target, { recursive: true });
+      // Tes tulis permission
+      const testFile = path.join(target, `.test_${Date.now()}`);
+      fs.writeFileSync(testFile, 'test');
+      fs.unlinkSync(testFile);
+    } catch (e) {
+      target = file.fieldname === 'cover' ? TMP_COVERS_DIR : TMP_MUSIC_DIR;
+    }
+    cb(null, target);
   },
   filename: (req, file, cb) => {
     const prefix = file.fieldname === 'cover' ? 'cover' : 'audio';
@@ -35,9 +59,19 @@ const songStorage = multer.diskStorage({
 });
 const uploadSong = multer({ storage: songStorage });
 
-// Upload cover playlist (foto profil playlist)
 const coverStorage = multer.diskStorage({
-  destination: (req, file, cb) => cb(null, COVERS_DIR),
+  destination: (req, file, cb) => {
+    let target = COVERS_DIR;
+    try {
+      if (!fs.existsSync(target)) fs.mkdirSync(target, { recursive: true });
+      const testFile = path.join(target, `.test_${Date.now()}`);
+      fs.writeFileSync(testFile, 'test');
+      fs.unlinkSync(testFile);
+    } catch (e) {
+      target = TMP_COVERS_DIR;
+    }
+    cb(null, target);
+  },
   filename: (req, file, cb) => {
     cb(null, `cover-${Date.now()}-${Math.round(Math.random() * 1e9)}${path.extname(file.originalname)}`);
   }
@@ -111,7 +145,6 @@ app.delete('/api/playlists/:id', (req, res) => {
   res.json({ message: 'Playlist berhasil dihapus', id: req.params.id });
 });
 
-// Upload/ganti foto cover playlist
 app.post('/api/playlists/:id/cover', uploadCover.single('cover'), (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'File cover wajib diupload' });
   const updated = db.setPlaylistCover(req.params.id, `/uploads/covers/${req.file.filename}`);
@@ -119,14 +152,12 @@ app.post('/api/playlists/:id/cover', uploadCover.single('cover'), (req, res) => 
   res.json(updated);
 });
 
-// Ambil semua lagu di dalam satu playlist
 app.get('/api/playlists/:id/songs', (req, res) => {
   const pl = db.getPlaylistById(req.params.id);
   if (!pl) return res.status(404).json({ error: 'Playlist tidak ditemukan' });
   res.json(db.getPlaylistSongs(req.params.id));
 });
 
-// Tambah lagu ke playlist
 app.post('/api/playlists/:id/songs', (req, res) => {
   const { songId } = req.body;
   if (!songId) return res.status(400).json({ error: 'songId wajib dikirim' });
@@ -135,7 +166,6 @@ app.post('/api/playlists/:id/songs', (req, res) => {
   res.json(updated);
 });
 
-// Hapus lagu dari playlist
 app.delete('/api/playlists/:id/songs/:songId', (req, res) => {
   const updated = db.removeSongFromPlaylist(req.params.id, req.params.songId);
   if (!updated) return res.status(404).json({ error: 'Playlist tidak ditemukan' });
@@ -148,7 +178,7 @@ app.get('*', (req, res) => {
 });
 
 // Listener khusus lokal (bukan Vercel)
-if (process.env.NODE_ENV !== 'production') {
+if (process.env.NODE_ENV !== 'production' && !process.env.VERCEL) {
   app.listen(PORT, () => {
     console.log(`Server berjalan di http://localhost:${PORT}`);
   });
