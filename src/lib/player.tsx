@@ -33,7 +33,7 @@ export interface PlayerApi {
   previous: () => void;
   seek: (ms: number) => void;
   setVolume: (value: number) => void;
-  addToQueue: (track: Track) => void;
+  addToQueue: (track: Track) => boolean;
   removeFromQueue: (index: number) => void;
   clearError: () => void;
 }
@@ -390,11 +390,13 @@ export function PlayerProvider({ clientId, premium, onTrackStart, children }: Pl
     storage.saveVolume(clamped);
   }, []);
 
-  const addToQueue = useCallback((track: Track) => {
+  const addToQueue = useCallback((track: Track): boolean => {
+    if (queueRef.current.some((item) => item.id === track.id)) return false;
     setQueue((previousQueue) => {
       if (previousQueue.some((item) => item.id === track.id)) return previousQueue;
       return [...previousQueue, track];
     });
+    return true;
   }, []);
 
   const removeFromQueue = useCallback(

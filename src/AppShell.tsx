@@ -117,8 +117,12 @@ export function AppShell() {
 
   const handleQueueCurrent = () => {
     if (!current) return;
-    player.addToQueue(current);
-    notify('Lagu ditambahkan ke antrean.');
+    const added = player.addToQueue(current);
+    notify(
+      added
+        ? 'Lagu ditambahkan ke antrean.'
+        : 'Lagu ini sudah ada di antrean.',
+    );
   };
 
   const handleToggleFavorite = () => {
@@ -335,8 +339,12 @@ export function AppShell() {
           setSearchOpen(false);
         }}
         onQueue={(track) => {
-          player.addToQueue(track);
-          notify(`${track.title} masuk antrean.`);
+          const added = player.addToQueue(track);
+          notify(
+            added
+              ? `${track.title} masuk antrean.`
+              : `${track.title} sudah ada di antrean.`,
+          );
         }}
       />
 

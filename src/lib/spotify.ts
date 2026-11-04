@@ -178,7 +178,7 @@ export const MOODS: Mood[] = [
 ];
 
 const LISTEN_NOW_QUERIES = [
-  'indie pop 2024',
+  'indie pop',
   'lofi beats',
   'city pop',
   'rnb soul',
