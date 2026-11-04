@@ -91,8 +91,7 @@ Vercel:
 ## Struktur
 
 ```
-api/            endpoint serverless (config + proxy Spotify)
-server/         logika token & allowlist Spotify (dipakai api/ dan dev middleware)
+api/            endpoint serverless (config + proxy Spotify), mandiri tanpa import lokal
 src/
   components/   navbar, Now Playing, side panel, search, visualizer, dll.
   lib/          auth PKCE, player, library, storage, lyrics, vibe, spotify client
