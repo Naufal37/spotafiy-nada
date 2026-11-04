@@ -1,4 +1,19 @@
 node_modules/
+dist/
+.vercel/
+
+# Jangan pernah commit credential Spotify
+.env
+.env.local
+.env.*.local
+
+# Sisa data versi lama (kalau masih ada)
 data/nada.db
 data/nada.db-wal
 data/nada.db-shm
+data/music.db
+
+# OS / editor
+.DS_Store
+Thumbs.db
+*.log

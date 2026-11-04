@@ -1,14 +1,27 @@
 {
   "name": "nada-music-player",
-  "version": "1.0.0",
-  "description": "Website music player dengan upload lagu, API, dan database SQLite",
-  "main": "server.js",
+  "version": "2.0.0",
+  "private": true,
+  "description": "Nada — web music player dengan katalog Spotify dan navbar liquid glass",
+  "type": "module",
   "scripts": {
-    "start": "node server.js"
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "sqlite3": "^5.1.7",
-    "express": "^4.19.2",
-    "multer": "^1.4.5-lts.1"
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0",
+    "webgl-liquid-glass": "^0.2.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "@types/react": "^19.1.0",
+    "@types/react-dom": "^19.1.0",
+    "@vercel/node": "^3.2.0",
+    "@vitejs/plugin-react": "^4.3.4",
+    "typescript": "^5.7.0",
+    "vite": "^6.0.0"
   }
 }

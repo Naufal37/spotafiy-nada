@@ -1,107 +1,104 @@
-# Nada — Music Player (versi Database + API)
+# nada.
 
-Versi ini beda dari sebelumnya: sekarang ada **server (backend)** dan **database**,
-jadi kamu bisa tambah/hapus lagu langsung lewat form di website — nggak perlu edit kode lagi.
+Pemutar musik malam hari: panel Now Playing besar, panel lirik/antrean, dan
+navbar liquid glass. Katalog lagu diambil dari **Spotify Web API**, lirik dari
+**LRCLIB**, dan semua data pribadi (favorit, playlist, riwayat, volume, mood
+sync) disimpan di `localStorage` browser — tanpa akun sendiri, tanpa database.
 
-## Cara kerjanya (singkat)
+Desain mengikuti spesifikasi **Nocturne** (`design.md`): gelap, neon dusk,
+panel kaca, aksen oranye/pink.
+
+## Stack
+
+- React 19 + Vite 6 + TypeScript
+- `webgl-liquid-glass` untuk navbar (fallback CSS otomatis kalau WebGL tidak tersedia)
+- Spotify Web API lewat proxy serverless `/api/spotify` (Client Secret aman di server)
+- Web Playback SDK (butuh Spotify Premium) + fallback preview 30 detik
+- LRCLIB untuk lirik (tanpa API key)
+
+## Menjalankan lokal
+
+1. Install dependency:
+
+   ```powershell
+   & "C:\Program Files\nodejs\npm.cmd" install
+   ```
+
+2. Salin `.env.example` menjadi `.env.local`, lalu isi:
+
+   ```env
+   SPOTIFY_CLIENT_ID=...
+   SPOTIFY_CLIENT_SECRET=...
+   ```
+
+3. Jalankan:
+
+   ```powershell
+   & "C:\Program Files\nodejs\npm.cmd" run dev
+   ```
+
+   Buka <http://localhost:5173>.
+
+> Di PowerShell, `npm` bisa diblokir execution policy. Pakai `npm.cmd` seperti
+> contoh di atas, atau `cmd /c npm run dev`.
+
+## Membuat aplikasi Spotify
+
+1. Buka <https://developer.spotify.com/dashboard> → **Create app**.
+2. Isi nama bebas (mis. `nada player`) dan Redirect URI:
+   - `http://localhost:5173/` untuk lokal
+   - `https://<domain-vercel-kamu>/` untuk produksi
+3. Salin **Client ID** dan **Client Secret**.
+4. Di dashboard Spotify, buka **Settings → User Management** dan tambahkan akun
+   Spotify yang akan dipakai (Developer mode membatasi 25 user).
+
+Catatan:
+
+- Katalog, pencarian, artwork, dan halaman Moods **tidak butuh login** — cukup
+  Client ID + Secret di server (Client Credentials).
+- Login Spotify (PKCE) hanya untuk memutar lagu **utuh** lewat Web Playback SDK.
+  Akun harus **Premium**; akun Free hanya dapat preview 30 detik kalau lagunya
+  menyediakan `preview_url` (Spotify sering mengosongkannya).
+- Spotify **Audio Features** sudah ditutup untuk aplikasi baru, jadi angka
+  Energy/Warmth/Tempo di panel "The vibe" adalah **perkiraan dari metadata**
+  (populeritas, tahun rilis, durasi) — bukan analisis audio. Labelnya sudah
+  ditulis jujur di UI.
+
+## Build & deploy
+
+```powershell
+& "C:\Program Files\nodejs\npm.cmd" run build   # tsc --noEmit + vite build
+& "C:\Program Files\nodejs\npm.cmd" run preview # cek hasil build
+```
+
+Vercel:
+
+1. Import repo, Framework Preset **Vite** (sudah diatur di `vercel.json`).
+2. Tambahkan Environment Variables `SPOTIFY_CLIENT_ID` dan `SPOTIFY_CLIENT_SECRET`.
+3. Deploy. Tambahkan domain hasil deploy ke Redirect URI aplikasi Spotify.
+4. `/api/config` dipakai frontend untuk tahu apakah Spotify sudah dikonfigurasi;
+   `/api/spotify` adalah proxy dengan allowlist endpoint dan cache 120 detik.
+
+## Batasan yang disengaja
+
+- Tidak ada login admin, upload MP3, atau database sendiri.
+- Tidak ada lirik karangan: kalau LRCLIB tidak punya lagunya, panel kosong.
+- Tidak ada tombol dekoratif: semua kontrol berfungsi, dan yang belum ada
+  sumbernya diberi label jelas.
+- Mood sync hanya mengubah suasana visual (aurora latar), bukan menganalisis audio.
+- `prefers-reduced-motion` dihormati; navbar dan kontrol punya label `aria`.
+
+## Struktur
 
 ```
-Browser (frontend)  <-- fetch() -->  Express server (server.js)  <-->  SQLite (data/nada.db)
-   public/index.html                      + Multer (upload file)         uploads/music/
-   public/style.css                                                       uploads/covers/
-   public/script.js
+api/            endpoint serverless (config + proxy Spotify)
+server/         logika token & allowlist Spotify (dipakai api/ dan dev middleware)
+src/
+  components/   navbar, Now Playing, side panel, search, visualizer, dll.
+  lib/          auth PKCE, player, library, storage, lyrics, vibe, spotify client
+  views/        Listen now, Moods, Library, Radio
+  styles/       token & seluruh styling Nocturne
 ```
 
-- **Frontend** (`public/`): tampilan yang kamu lihat di browser. Sekarang dia manggil API,
-  bukan baca array lagu yang di-hardcode kayak sebelumnya.
-- **Backend** (`server.js` + `db.js`): server Node.js/Express yang nyediain endpoint API,
-  nyimpen file yang diupload ke folder `uploads/`, dan nyimpen data lagu ke database SQLite.
-- **Database** (`data/nada.db`): file database SQLite, otomatis dibuat pas server pertama
-  kali dijalankan.
-
-## 1. Persiapan (sekali aja)
-
-1. Install **Node.js** dulu kalau belum ada: https://nodejs.org (pilih versi LTS).
-   Cek sudah kepasang dengan buka CMD lalu ketik:
-   ```
-   node -v
-   npm -v
-   ```
-2. Extract folder ini, buka CMD/terminal di dalam folder `nada-fullstack`.
-3. Install semua dependency:
-   ```
-   npm install
-   ```
-   (ini bakal download Express, Multer, dan better-sqlite3 — sekali install aja, nanti kepakai terus)
-
-## 2. Menjalankan website
-
-```
-npm start
-```
-
-Kalau berhasil, muncul tulisan `Nada jalan di http://localhost:3000`.
-Buka browser, akses **http://localhost:3000** — websitenya jalan dari situ.
-
-Biarkan jendela terminal itu tetap terbuka selama kamu pakai websitenya (itu server-nya jalan).
-Untuk mematikan server, tekan `Ctrl + C` di terminal.
-
-## 3. Cara menambahkan lagu (sekarang lewat website, bukan edit kode!)
-
-1. Buka website, klik menu **"+ Tambah Lagu"** di navbar.
-2. Isi judul, nama artis, pilih file MP3 (wajib), dan cover gambar (opsional).
-3. Klik **Upload Lagu**.
-4. Lagu otomatis kesimpen ke database dan langsung muncul di Beranda / Rekomendasi.
-
-File yang kamu upload otomatis disalin server ke:
-- `uploads/music/` untuk file MP3
-- `uploads/covers/` untuk cover
-
-## 4. Fitur yang tersedia
-
-- Upload lagu baru lewat form (tersimpan ke database SQLite)
-- Hapus lagu (hover di kartu lagu → klik ikon tempat sampah — otomatis hapus data + filenya juga)
-- Play/pause, next/previous, shuffle, repeat
-- Progress bar (seek) + durasi real-time, volume control
-- Pencarian lagu (judul & artis)
-- Favorit — sekarang tersimpan di database, bukan cuma di browser, jadi tetap ada
-  meskipun kamu buka dari browser lain
-- Playlist — bisa buat playlist baru, tambah/keluarin lagu dari playlist, hapus playlist
-- Music player tetap nempel di bawah di semua halaman
-- Responsive: desktop, tablet, HP
-
-## 5. Daftar API (kalau mau dikembangin sendiri)
-
-| Method | Endpoint                              | Fungsi                          |
-|--------|----------------------------------------|----------------------------------|
-| GET    | `/api/songs`                           | Ambil semua lagu                |
-| POST   | `/api/songs`                           | Upload lagu baru (form-data)    |
-| PUT    | `/api/songs/:id`                       | Edit judul/artis lagu           |
-| PATCH  | `/api/songs/:id/favorite`              | Toggle status favorit           |
-| DELETE | `/api/songs/:id`                       | Hapus lagu (+ file-nya)         |
-| GET    | `/api/playlists`                       | Ambil semua playlist            |
-| POST   | `/api/playlists`                       | Buat playlist baru              |
-| POST   | `/api/playlists/:id/songs`             | Tambah lagu ke playlist         |
-| DELETE | `/api/playlists/:id/songs/:songId`     | Keluarkan lagu dari playlist    |
-| DELETE | `/api/playlists/:id`                   | Hapus playlist                  |
-
-## 6. Reset data dari awal
-
-Kalau mau kosongin semua data (lagu, playlist, favorit) dan mulai dari nol:
-
-1. Matikan server (`Ctrl + C`)
-2. Hapus file `data/nada.db` (dan `data/nada.db-wal`, `data/nada.db-shm` kalau ada)
-3. Hapus semua file di dalam `uploads/music/` dan `uploads/covers/`
-4. Jalankan `npm start` lagi — database kosong otomatis dibuat ulang
-
-## 7. Ganti nama website
-
-Buka `public/index.html`, cari `<div class="logo">`, ubah teks di dalam `<span>Nada</span>`.
-Judul tab browser ada di tag `<title>` pada bagian `<head>`.
-
-## Catatan
-
-Website ini jalan **lokal di komputer kamu** (localhost). Kalau mau bisa diakses dari HP
-atau perangkat lain di jaringan yang sama, kamu perlu cari tahu IP lokal komputermu
-(`ipconfig` di CMD) dan akses `http://IP-KAMU:3000` dari perangkat lain — pastikan
-firewall Windows mengizinkan koneksi ke port 3000.
+Data lama (MP3/cover versi sebelumnya) dipindahkan ke
+`D:\nada-fullstack-backup\uploads` sebelum dihapus dari repo.
