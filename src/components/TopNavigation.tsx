@@ -53,7 +53,7 @@ export function TopNavigation({
           activeItem={view}
           onItemChange={(id) => onViewChange(id as ViewId)}
           activeColor="rgba(24, 13, 22, 0.92)"
-          inactiveColor="rgba(24, 13, 22, 0.46)"
+          inactiveColor="rgba(24, 13, 22, 0.66)"
           style={{
             background: 'rgba(255, 248, 240, 0.58)',
             backdropFilter: 'blur(22px) saturate(180%)',

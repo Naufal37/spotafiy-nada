@@ -171,6 +171,10 @@ export function AppShell() {
 
   return (
     <div className="app">
+      <a className="skip-link" href="#main">
+        Lewati ke konten utama
+      </a>
+
       <TopNavigation
         view={view}
         onViewChange={setView}
@@ -225,7 +229,8 @@ export function AppShell() {
         </div>
       ) : null}
 
-      {view === 'listen' ? (
+      <main id="main" className="main">
+        {view === 'listen' ? (
         <div className="view">
           <div className="layout">
             {playerPanel}
@@ -304,6 +309,7 @@ export function AppShell() {
           onPlay={(tracks, index) => player.playQueue(tracks, index)}
         />
       ) : null}
+      </main>
 
       <footer
         style={{
