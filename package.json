@@ -4,6 +4,9 @@
   "private": true,
   "description": "Nada — web music player dengan katalog Spotify dan navbar liquid glass",
   "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
