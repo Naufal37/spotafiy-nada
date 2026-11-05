@@ -3,7 +3,7 @@ import type { Track, ViewId } from './types';
 import { useAuth } from './lib/auth-context';
 import { useLibrary } from './lib/library';
 import { usePlayer } from './lib/player';
-import { loadDiscovery } from './lib/spotify';
+import { loadDiscovery, SpotifyApiError } from './lib/spotify';
 import { TopNavigation } from './components/TopNavigation';
 import { NowPlayingPanel } from './components/NowPlayingPanel';
 import { SidePanel, type SideTab } from './components/SidePanel';
@@ -77,10 +77,14 @@ export function AppShell() {
       .then((tracks) => {
         if (alive) setDiscovery(tracks);
       })
-      .catch(() => {
+      .catch((error: unknown) => {
         if (!alive) return;
         setDiscovery([]);
-        setDiscoveryError('Tidak bisa memuat katalog Spotify. Cek Client ID/Secret atau kuota API.');
+        setDiscoveryError(
+          error instanceof SpotifyApiError
+            ? error.message
+            : 'Tidak bisa memuat katalog Spotify. Cek Client ID/Secret atau kuota API.',
+        );
       })
       .finally(() => {
         if (alive) setDiscoveryLoading(false);

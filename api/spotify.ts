@@ -128,6 +128,21 @@ export default async function handler(
 
     const body = await response.text();
 
+    /*
+     * Sebagian error Spotify (mis. "Active premium subscription required…")
+     * dikirim sebagai teks biasa, bukan JSON. Bungkus supaya frontend selalu
+     * menerima JSON dengan pesan yang bisa ditampilkan.
+     */
+    let payload = body;
+    try {
+      JSON.parse(body);
+    } catch {
+      payload = JSON.stringify({
+        error: `spotify_http_${response.status}`,
+        message: body.trim().slice(0, 500),
+      });
+    }
+
     res.statusCode = response.status;
     res.setHeader('Content-Type', 'application/json; charset=utf-8');
     res.setHeader(
@@ -136,7 +151,7 @@ export default async function handler(
         ? 'public, s-maxage=120, stale-while-revalidate=600'
         : 'no-store',
     );
-    res.end(body);
+    res.end(payload);
   } catch (error) {
     const message = error instanceof Error ? error.message : 'unknown_error';
 

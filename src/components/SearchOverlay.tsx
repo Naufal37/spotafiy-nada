@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Track } from '../types';
-import { searchTracks } from '../lib/spotify';
+import { searchTracks, SpotifyApiError } from '../lib/spotify';
 import { Artwork } from './Artwork';
 import { IconPlus, IconSearch } from './Icons';
 
@@ -53,10 +53,14 @@ export function SearchOverlay({ open, onClose, onPlay, onQueue }: SearchOverlayP
           setCursor(0);
           setError(null);
         })
-        .catch(() => {
+        .catch((error: unknown) => {
           if (!alive) return;
           setResults([]);
-          setError('Pencarian gagal. Cek koneksi atau konfigurasi Spotify.');
+          setError(
+            error instanceof SpotifyApiError
+              ? error.message
+              : 'Pencarian gagal. Cek koneksi atau konfigurasi Spotify.',
+          );
         })
         .finally(() => {
           if (alive) setLoading(false);

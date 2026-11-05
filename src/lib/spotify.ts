@@ -62,11 +62,35 @@ async function api<T>(endpoint: string, params?: Record<string, string | number 
   }
 
   if (!response.ok) {
-    const body = payload as { error?: string; message?: string } | null;
-    throw new SpotifyApiError(
-      body?.error ?? `http_${response.status}`,
-      body?.message ?? `Spotify menolak permintaan (${response.status}).`,
-    );
+    const payloadError = payload as
+      | {
+          error?: string | { status?: number; message?: string };
+          message?: string;
+        }
+      | null;
+
+    const nested =
+      payloadError && typeof payloadError.error === 'object' && payloadError.error !== null
+        ? payloadError.error
+        : null;
+    const code =
+      typeof payloadError?.error === 'string'
+        ? payloadError.error
+        : `http_${response.status}`;
+    // Spotify membalas { error: { status, message } }; proxy meneruskannya apa adanya.
+    const raw =
+      payloadError?.message ??
+      nested?.message ??
+      (payload === null && text.length < 500 ? text.trim() : '');
+
+    if (response.status === 403 && /premium/i.test(raw)) {
+      throw new SpotifyApiError(
+        'premium_required',
+        'Akun pembuat app Spotify harus Premium. Sejak 2026 Spotify menolak semua permintaan katalog dari app milik akun Free.',
+      );
+    }
+
+    throw new SpotifyApiError(code, raw || `Spotify menolak permintaan (${response.status}).`);
   }
 
   return payload as T;
