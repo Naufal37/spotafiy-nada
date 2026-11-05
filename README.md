@@ -37,7 +37,7 @@ panel kaca, aksen oranye/pink.
    & "C:\Program Files\nodejs\npm.cmd" run dev
    ```
 
-   Buka <http://localhost:5173>.
+   Buka <http://127.0.0.1:5173>.
 
 > Di PowerShell, `npm` bisa diblokir execution policy. Pakai `npm.cmd` seperti
 > contoh di atas, atau `cmd /c npm run dev`.
@@ -46,7 +46,7 @@ panel kaca, aksen oranye/pink.
 
 1. Buka <https://developer.spotify.com/dashboard> → **Create app**.
 2. Isi nama bebas (mis. `nada player`) dan Redirect URI:
-   - `http://localhost:5173/` untuk lokal
+   - `http://127.0.0.1:5173/` untuk lokal (Spotify menolak `localhost` sejak April 2025)
    - `https://<domain-vercel-kamu>/` untuk produksi
 3. Salin **Client ID** dan **Client Secret**.
 4. Di dashboard Spotify, buka **Settings → User Management** dan tambahkan akun

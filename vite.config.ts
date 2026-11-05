@@ -44,6 +44,16 @@ export default defineConfig(({ mode }) => {
 
   return {
     plugins: [react(), devApi()],
-    server: { port: 5173 },
+    server: {
+      /*
+       * Spotify tidak lagi menerima redirect URI berisi "localhost" (sejak
+       * April 2025) — yang sah hanya loopback literal seperti 127.0.0.1.
+       * Jadi dev server sengaja listen di IPv4 loopback supaya origin-nya
+       * http://127.0.0.1:5173, sama persis dengan yang didaftarkan.
+       */
+      host: '127.0.0.1',
+      port: 5173,
+      strictPort: true,
+    },
   };
 });
