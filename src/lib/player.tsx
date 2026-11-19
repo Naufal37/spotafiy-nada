@@ -9,11 +9,9 @@ import {
   type ReactNode,
 } from 'react';
 import type { Track } from '../types';
-import { getAccessToken } from './auth';
 import { storage } from './storage';
 
-export type Engine = 'idle' | 'preview' | 'spotify';
-export type SdkStatus = 'off' | 'loading' | 'ready' | 'error' | 'no-premium';
+export type Engine = 'idle' | 'jamendo';
 
 export interface PlayerApi {
   queue: Track[];
@@ -24,7 +22,6 @@ export interface PlayerApi {
   durationMs: number;
   volume: number;
   engine: Engine;
-  sdkStatus: SdkStatus;
   error: string | null;
   playQueue: (tracks: Track[], startIndex?: number) => void;
   playAt: (index: number) => void;
@@ -41,13 +38,11 @@ export interface PlayerApi {
 const PlayerContext = createContext<PlayerApi | null>(null);
 
 interface PlayerProviderProps {
-  clientId: string | null;
-  premium: boolean;
   onTrackStart?: (track: Track) => void;
   children: ReactNode;
 }
 
-export function PlayerProvider({ clientId, premium, onTrackStart, children }: PlayerProviderProps) {
+export function PlayerProvider({ onTrackStart, children }: PlayerProviderProps) {
   const [audio] = useState(() => {
     const element = new Audio();
     element.preload = 'metadata';
@@ -61,13 +56,10 @@ export function PlayerProvider({ clientId, premium, onTrackStart, children }: Pl
   const [durationMs, setDurationMs] = useState(0);
   const [volume, setVolumeState] = useState(() => storage.loadVolume());
   const [engine, setEngine] = useState<Engine>('idle');
-  const [sdkStatus, setSdkStatus] = useState<SdkStatus>('off');
-  const [deviceId, setDeviceId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const engineRef = useRef<Engine>('idle');
   const queueRef = useRef<Track[]>([]);
-  const sdkPlayerRef = useRef<SpotifySdkPlayer | null>(null);
   const onTrackStartRef = useRef(onTrackStart);
   const startingRef = useRef(false);
 
@@ -86,25 +78,26 @@ export function PlayerProvider({ clientId, premium, onTrackStart, children }: Pl
   const current = queue[index] ?? null;
 
   // -------------------------------------------------------------------------
-  // Pemutar fallback: <audio> biasa untuk preview 30 detik.
+  // Pemutar streaming: MP3 penuh dari Jamendo lewat <audio> biasa.
+  // Tidak ada Web Playback SDK, tidak perlu akun Premium, tidak perlu login.
   // -------------------------------------------------------------------------
   useEffect(() => {
     const onTime = () => {
-      if (engineRef.current !== 'preview') return;
+      if (engineRef.current !== 'jamendo') return;
       setPositionMs(audio.currentTime * 1000);
     };
     const onMeta = () => {
-      if (engineRef.current !== 'preview') return;
+      if (engineRef.current !== 'jamendo') return;
       if (Number.isFinite(audio.duration)) setDurationMs(audio.duration * 1000);
     };
     const onEnd = () => {
-      if (engineRef.current !== 'preview') return;
+      if (engineRef.current !== 'jamendo') return;
       setIsPlaying(false);
       nextRef.current();
     };
     const onError = () => {
-      if (engineRef.current !== 'preview') return;
-      setError('Preview lagu ini gagal dimuat.');
+      if (engineRef.current !== 'jamendo') return;
+      setError('Streaming lagu ini gagal dimuat. Coba lagu lain.');
       setIsPlaying(false);
     };
 
@@ -122,138 +115,19 @@ export function PlayerProvider({ clientId, premium, onTrackStart, children }: Pl
 
   useEffect(() => {
     audio.volume = volume;
-    sdkPlayerRef.current?.setVolume(volume).catch(() => undefined);
   }, [audio, volume]);
-
-  // -------------------------------------------------------------------------
-  // Web Playback SDK (butuh Premium)
-  // -------------------------------------------------------------------------
-  const sdkEnabled = Boolean(clientId) && premium;
-
-  useEffect(() => {
-    if (!sdkEnabled || !clientId) {
-      setSdkStatus('off');
-      return;
-    }
-
-    let disposed = false;
-
-    const init = () => {
-      if (disposed) return;
-      if (!window.Spotify) {
-        window.onSpotifyWebPlaybackSDKReady = init;
-        return;
-      }
-      setSdkStatus('loading');
-      const player = new window.Spotify.Player({
-        name: 'Nada Web Player',
-        getOAuthToken: (callback) => {
-          void getAccessToken(clientId).then((token) => {
-            if (token) callback(token);
-          });
-        },
-        volume: storage.loadVolume(),
-      });
-      sdkPlayerRef.current = player;
-
-      player.addListener('ready', ((payload: { device_id: string }) => {
-        if (disposed) return;
-        setDeviceId(payload.device_id);
-        setSdkStatus('ready');
-      }) as never);
-
-      player.addListener('not_ready', (() => {
-        if (disposed) return;
-        setDeviceId(null);
-      }) as never);
-
-      player.addListener('initialization_error', ((payload: SpotifySdkError) => {
-        setSdkStatus('error');
-        setError(`Pemutar Spotify gagal dimuat: ${payload.message}`);
-      }) as never);
-
-      player.addListener('authentication_error', (() => {
-        setSdkStatus('error');
-        setError('Sesi Spotify kedaluwarsa. Coba login ulang.');
-      }) as never);
-
-      player.addListener('account_error', (() => {
-        setSdkStatus('no-premium');
-      }) as never);
-
-      player.addListener('player_state_changed', ((state: SpotifySdkState | null) => {
-        if (disposed || !state) return;
-        setPositionMs(state.position);
-        setDurationMs(state.duration);
-        setIsPlaying(!state.paused);
-        const uri = state.track_window.current_track.uri;
-        const found = queueRef.current.findIndex((track) => track.uri === uri);
-        if (found >= 0) setIndex(found);
-      }) as never);
-
-      void player.connect();
-    };
-
-    const existing = document.getElementById('spotify-player-sdk');
-    if (existing) {
-      init();
-    } else {
-      window.onSpotifyWebPlaybackSDKReady = init;
-      const script = document.createElement('script');
-      script.id = 'spotify-player-sdk';
-      script.src = 'https://sdk.scdn.co/spotify-player.js';
-      script.async = true;
-      document.body.appendChild(script);
-    }
-
-    return () => {
-      disposed = true;
-      sdkPlayerRef.current?.disconnect();
-      sdkPlayerRef.current = null;
-    };
-  }, [clientId, sdkEnabled]);
 
   // -------------------------------------------------------------------------
   // Kontrol
   // -------------------------------------------------------------------------
-  const spotifyAvailable = Boolean(premium && sdkStatus === 'ready' && deviceId && clientId);
-
-  const playThroughSpotify = useCallback(
-    async (tracks: Track[]): Promise<boolean> => {
-      const uris = tracks.map((track) => track.uri).filter((uri): uri is string => Boolean(uri));
-      if (!clientId || !deviceId || uris.length === 0) return false;
-
-      const token = await getAccessToken(clientId);
-      if (!token) return false;
-
-      const response = await fetch(
-        `https://api.spotify.com/v1/me/player/play?device_id=${encodeURIComponent(deviceId)}`,
-        {
-          method: 'PUT',
-          headers: {
-            Authorization: `Bearer ${token}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({ uris }),
-        },
-      );
-
-      if (!response.ok) return false;
-      setEngine('spotify');
-      setIsPlaying(true);
-      return true;
-    },
-    [clientId, deviceId],
-  );
-
-  const playPreview = useCallback(
+  const playStream = useCallback(
     async (track: Track): Promise<boolean> => {
-      if (!track.previewUrl) return false;
+      if (!track.streamUrl) return false;
       try {
-        setEngine('preview');
+        setEngine('jamendo');
         setDurationMs(track.durationMs);
         setPositionMs(0);
-        audio.src = track.previewUrl;
+        audio.src = track.streamUrl;
         await audio.play();
         setIsPlaying(true);
         return true;
@@ -280,27 +154,21 @@ export function PlayerProvider({ clientId, premium, onTrackStart, children }: Pl
 
       try {
         audio.pause();
-
-        if (spotifyAvailable) {
-          const ok = await playThroughSpotify(tracks.slice(startIndex));
-          if (ok) return;
-        }
-
-        const ok = await playPreview(track);
+        const ok = await playStream(track);
         if (!ok) {
           setIsPlaying(false);
           setEngine('idle');
           setError(
-            track.previewUrl
-              ? 'Lagu ini gagal diputar.'
-              : 'Lagu ini tidak punya preview, dan pemutar Premium belum aktif. Login Spotify Premium untuk memutar lagu utuh.',
+            track.streamUrl
+              ? 'Lagu ini gagal diputar. Coba lagu lain.'
+              : 'Lagu ini tidak menyediakan URL streaming dari Jamendo.',
           );
         }
       } finally {
         startingRef.current = false;
       }
     },
-    [audio, playPreview, playThroughSpotify, spotifyAvailable],
+    [audio, playStream],
   );
 
   const playQueue = useCallback(
@@ -324,7 +192,7 @@ export function PlayerProvider({ clientId, premium, onTrackStart, children }: Pl
     const target = Math.min(index + 1, tracks.length - 1);
     if (target === index) {
       setIsPlaying(false);
-      if (engineRef.current === 'preview') audio.pause();
+      if (engineRef.current === 'jamendo') audio.pause();
       return;
     }
     void startAt(tracks, target);
@@ -339,8 +207,7 @@ export function PlayerProvider({ clientId, premium, onTrackStart, children }: Pl
     const tracks = queueRef.current;
     if (tracks.length === 0) return;
     if (positionMs > 4000) {
-      if (engineRef.current === 'preview') audio.currentTime = 0;
-      else void sdkPlayerRef.current?.seek(0);
+      if (engineRef.current === 'jamendo') audio.currentTime = 0;
       setPositionMs(0);
       return;
     }
@@ -353,18 +220,13 @@ export function PlayerProvider({ clientId, premium, onTrackStart, children }: Pl
       return;
     }
 
-    if (engineRef.current === 'preview') {
+    if (engineRef.current === 'jamendo') {
       if (audio.paused) {
         void audio.play().then(() => setIsPlaying(true)).catch(() => setIsPlaying(false));
       } else {
         audio.pause();
         setIsPlaying(false);
       }
-      return;
-    }
-
-    if (engineRef.current === 'spotify' && sdkPlayerRef.current) {
-      void sdkPlayerRef.current.togglePlay();
       return;
     }
 
@@ -375,10 +237,8 @@ export function PlayerProvider({ clientId, premium, onTrackStart, children }: Pl
     (ms: number) => {
       const clamped = Math.max(0, Math.min(ms, durationMs || ms));
       setPositionMs(clamped);
-      if (engineRef.current === 'preview') {
+      if (engineRef.current === 'jamendo') {
         audio.currentTime = clamped / 1000;
-      } else if (engineRef.current === 'spotify') {
-        void sdkPlayerRef.current?.seek(clamped);
       }
     },
     [audio, durationMs],
@@ -409,23 +269,13 @@ export function PlayerProvider({ clientId, premium, onTrackStart, children }: Pl
 
   const clearError = useCallback(() => setError(null), []);
 
-  // Polling posisi (SDK tidak mengirim progress tiap detik).
+  // Progres diperbarui dari <audio> (timeupdate sudah cukup, polling ringan
+  // tetap dibutuhkan saat drag seek).
   useEffect(() => {
     if (!isPlaying) return;
     const timer = window.setInterval(() => {
-      if (engineRef.current === 'preview') {
-        setPositionMs(audio.currentTime * 1000);
-        return;
-      }
-      const player = sdkPlayerRef.current;
-      if (engineRef.current === 'spotify' && player) {
-        void player.getCurrentState().then((state) => {
-          if (!state) return;
-          setPositionMs(state.position);
-          setDurationMs(state.duration);
-          setIsPlaying(!state.paused);
-        });
-      }
+      if (engineRef.current !== 'jamendo') return;
+      if (!Number.isNaN(audio.currentTime)) setPositionMs(audio.currentTime * 1000);
     }, 600);
     return () => window.clearInterval(timer);
   }, [audio, isPlaying]);
@@ -445,7 +295,6 @@ export function PlayerProvider({ clientId, premium, onTrackStart, children }: Pl
       durationMs,
       volume,
       engine,
-      sdkStatus,
       error,
       playQueue,
       playAt,
@@ -467,7 +316,6 @@ export function PlayerProvider({ clientId, premium, onTrackStart, children }: Pl
       durationMs,
       volume,
       engine,
-      sdkStatus,
       error,
       playQueue,
       playAt,

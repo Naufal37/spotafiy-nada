@@ -25,14 +25,21 @@ export function writeJson(key: string, value: unknown): void {
   }
 }
 
+/** Data lama dari versi Spotify tidak punya streamUrl dan tidak bisa diputar. */
+const isPlayable = (track: Track): boolean => Boolean(track?.streamUrl);
+
 export const storage = {
-  loadFavorites: (): Track[] => readJson<Track[]>(FAVORITES_KEY, []),
+  loadFavorites: (): Track[] => readJson<Track[]>(FAVORITES_KEY, []).filter(isPlayable),
   saveFavorites: (tracks: Track[]) => writeJson(FAVORITES_KEY, tracks.slice(0, 200)),
 
-  loadRecent: (): Track[] => readJson<Track[]>(RECENT_KEY, []),
+  loadRecent: (): Track[] => readJson<Track[]>(RECENT_KEY, []).filter(isPlayable),
   saveRecent: (tracks: Track[]) => writeJson(RECENT_KEY, tracks.slice(0, 30)),
 
-  loadPlaylists: (): Playlist[] => readJson<Playlist[]>(PLAYLISTS_KEY, []),
+  loadPlaylists: (): Playlist[] =>
+    readJson<Playlist[]>(PLAYLISTS_KEY, []).map((playlist) => ({
+      ...playlist,
+      tracks: Array.isArray(playlist.tracks) ? playlist.tracks.filter(isPlayable) : [],
+    })),
   savePlaylists: (playlists: Playlist[]) => writeJson(PLAYLISTS_KEY, playlists),
 
   loadVolume: (): number => {
@@ -41,6 +48,6 @@ export const storage = {
   },
   saveVolume: (value: number) => writeJson(VOLUME_KEY, value),
 
-  loadQueue: (): Track[] => readJson<Track[]>(QUEUE_KEY, []),
+  loadQueue: (): Track[] => readJson<Track[]>(QUEUE_KEY, []).filter(isPlayable),
   saveQueue: (tracks: Track[]) => writeJson(QUEUE_KEY, tracks.slice(0, 80)),
 };

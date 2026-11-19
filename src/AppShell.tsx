@@ -1,9 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { Track, ViewId } from './types';
-import { useAuth } from './lib/auth-context';
 import { useLibrary } from './lib/library';
+import { JamendoApiError, loadDiscovery } from './lib/jamendo';
 import { usePlayer } from './lib/player';
-import { loadDiscovery, SpotifyApiError } from './lib/spotify';
 import { TopNavigation } from './components/TopNavigation';
 import { NowPlayingPanel } from './components/NowPlayingPanel';
 import { SidePanel, type SideTab } from './components/SidePanel';
@@ -12,10 +11,9 @@ import { TrackGrid } from './components/TrackGrid';
 import { MoodsView } from './views/MoodsView';
 import { LibraryView } from './views/LibraryView';
 import { RadioView } from './views/RadioView';
-import { IconClose } from './components/Icons';
+import { IconClose, IconRefresh } from './components/Icons';
 
 export function AppShell() {
-  const auth = useAuth();
   const library = useLibrary();
   const player = usePlayer();
 
@@ -24,7 +22,7 @@ export function AppShell() {
   const [sideTab, setSideTab] = useState<SideTab>('lyrics');
   const [toast, setToast] = useState<string | null>(null);
   const [setupDismissed, setSetupDismissed] = useState(false);
-  const [loginHintDismissed, setLoginHintDismissed] = useState(false);
+  const [jamendoConfigured, setJamendoConfigured] = useState<boolean | null>(null);
 
   const [discovery, setDiscovery] = useState<Track[]>([]);
   const [discoveryLoading, setDiscoveryLoading] = useState(true);
@@ -63,37 +61,47 @@ export function AppShell() {
   }, []);
 
   useEffect(() => {
-    if (!auth.ready) return;
-    if (!auth.spotifyConfigured) {
-      setDiscoveryLoading(false);
-      return;
-    }
-
     let alive = true;
-    setDiscoveryLoading(true);
-    setDiscoveryError(null);
-
-    void loadDiscovery()
-      .then((tracks) => {
-        if (alive) setDiscovery(tracks);
-      })
-      .catch((error: unknown) => {
+    void fetch('/api/config')
+      .then((response) => (response.ok ? response.json() : null))
+      .then((config: { jamendoConfigured?: boolean } | null) => {
         if (!alive) return;
-        setDiscovery([]);
-        setDiscoveryError(
-          error instanceof SpotifyApiError
-            ? error.message
-            : 'Tidak bisa memuat katalog Spotify. Cek Client ID/Secret atau kuota API.',
-        );
+        const ready = Boolean(config?.jamendoConfigured);
+        if (!ready) setDiscoveryLoading(false);
+        setJamendoConfigured(ready);
       })
-      .finally(() => {
-        if (alive) setDiscoveryLoading(false);
+      .catch(() => {
+        if (!alive) return;
+        setDiscoveryLoading(false);
+        setJamendoConfigured(false);
       });
-
     return () => {
       alive = false;
     };
-  }, [auth.ready, auth.spotifyConfigured]);
+  }, []);
+
+  const loadCatalog = useCallback(async () => {
+    setDiscoveryLoading(true);
+    setDiscoveryError(null);
+    try {
+      const tracks = await loadDiscovery();
+      setDiscovery(tracks);
+    } catch (error: unknown) {
+      setDiscovery([]);
+      setDiscoveryError(
+        error instanceof JamendoApiError
+          ? error.message
+          : 'Tidak bisa memuat katalog Jamendo. Cek koneksi atau kuota API.',
+      );
+    } finally {
+      setDiscoveryLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (jamendoConfigured !== true) return;
+    void loadCatalog();
+  }, [jamendoConfigured, loadCatalog]);
 
   const queue = player.queue;
   const duration = player.durationMs || current?.durationMs || 0;
@@ -104,9 +112,7 @@ export function AppShell() {
 
   const handleShare = async () => {
     if (!current) return;
-    const url = current.uri
-      ? `https://open.spotify.com/track/${current.id}`
-      : window.location.href;
+    const url = current.sourceUrl ?? window.location.href;
     try {
       if (navigator.share) {
         await navigator.share({ title: `${current.title} — ${current.artist}`, url });
@@ -137,19 +143,6 @@ export function AppShell() {
         ? 'Dihapus dari favorit.'
         : 'Disimpan ke favorit.',
     );
-  };
-
-  const handleLogout = () => {
-    auth.logout();
-    notify('Keluar dari Spotify. Katalog tetap bisa dipakai.');
-  };
-
-  const handleLogin = () => {
-    if (!auth.clientId) {
-      notify('SPOTIFY_CLIENT_ID belum diisi di server.');
-      return;
-    }
-    auth.login();
   };
 
   const playerPanel = useMemo(
@@ -196,40 +189,22 @@ export function AppShell() {
               : 'Mood sync nyala — ini hanya efek visual, bukan analisis audio.',
           );
         }}
-        me={auth.me}
-        canLogin={Boolean(auth.clientId)}
-        onLogin={handleLogin}
-        onLogout={handleLogout}
       />
 
-      {!auth.spotifyConfigured && !setupDismissed ? (
+      {jamendoConfigured === false && !setupDismissed ? (
         <div className="banner" role="status">
           <div>
-            <strong>Spotify belum tersambung.</strong> Isi <code>SPOTIFY_CLIENT_ID</code> dan{' '}
-            <code>SPOTIFY_CLIENT_SECRET</code> di <code>.env.local</code> (lokal) atau
-            Environment Variables Vercel, lalu restart. Tanpa itu katalog lagu belum bisa dimuat.
+            <strong>Jamendo belum tersambung.</strong> Daftar gratis di{' '}
+            <a href="https://devportal.jamendo.com" target="_blank" rel="noreferrer">
+              devportal.jamendo.com
+            </a>
+            , buat aplikasi, lalu isi <code>JAMENDO_CLIENT_ID</code> di <code>.env.local</code>{' '}
+            (lokal) atau Environment Variables Vercel, lalu restart. Tidak perlu akun Premium.
           </div>
           <button
             type="button"
             className="banner__close"
             onClick={() => setSetupDismissed(true)}
-            aria-label="Tutup pemberitahuan"
-          >
-            <IconClose size={14} />
-          </button>
-        </div>
-      ) : null}
-
-      {auth.spotifyConfigured && !auth.premium && !loginHintDismissed ? (
-        <div className="banner" role="status">
-          <div>
-            <strong>Mode preview.</strong> Login dengan akun Spotify Premium untuk memutar lagu
-            utuh. Tanpa login, hanya lagu yang punya preview 30 detik yang bisa dibunyikan.
-          </div>
-          <button
-            type="button"
-            className="banner__close"
-            onClick={() => setLoginHintDismissed(true)}
             aria-label="Tutup pemberitahuan"
           >
             <IconClose size={14} />
@@ -264,10 +239,20 @@ export function AppShell() {
                   {discoveryError
                     ? discoveryError
                     : discoveryLoading
-                      ? 'Menyusun pilihan dari katalog Spotify…'
+                      ? 'Menyusun pilihan dari katalog Jamendo…'
                       : `${discovery.length} lagu dari beberapa genre`}
                 </p>
               </div>
+              {jamendoConfigured === true ? (
+                <button
+                  type="button"
+                  className="link-btn"
+                  onClick={() => void loadCatalog()}
+                  disabled={discoveryLoading}
+                >
+                  <IconRefresh size={14} /> Coba lagi
+                </button>
+              ) : null}
             </div>
 
             {discoveryLoading ? (
@@ -289,9 +274,9 @@ export function AppShell() {
               <div className="empty" style={{ minHeight: 160 }}>
                 <span className="empty__title">Belum ada lagu</span>
                 <span>
-                  {auth.spotifyConfigured
-                    ? 'Coba muat ulang halaman, atau cari lagu lewat tombol search.'
-                    : 'Sambungkan Spotify dulu untuk memuat katalog.'}
+                  {jamendoConfigured === false
+                    ? 'Isi JAMENDO_CLIENT_ID dulu untuk memuat katalog.'
+                    : 'Tekan “Coba lagi” atau cari lagu lewat tombol search.'}
                 </span>
               </div>
             )}
@@ -331,7 +316,13 @@ export function AppShell() {
           justifyContent: 'space-between',
         }}
       >
-        <span>nada. — katalog oleh Spotify Web API</span>
+        <span>
+          nada. — katalog &amp; audio oleh{' '}
+          <a href="https://www.jamendo.com" target="_blank" rel="noreferrer">
+            Jamendo
+          </a>{' '}
+          (CC)
+        </span>
         <span>Lirik oleh LRCLIB · dibuat ulang dari desain Nocturne</span>
       </footer>
 

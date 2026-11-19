@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import type { Track } from '../types';
-import { MOODS, searchTracks, type Mood } from '../lib/spotify';
+import { MOODS, searchTracksByTags, type Mood } from '../lib/jamendo';
 import { TrackGrid } from '../components/TrackGrid';
 import { IconRefresh } from '../components/Icons';
 
@@ -21,7 +21,7 @@ export function MoodsView({ onPlay }: MoodsViewProps) {
     setLoading(true);
     setError(null);
 
-    void searchTracks(active.query, 24)
+    void searchTracksByTags(active.query, 24)
       .then((result) => {
         if (alive) setTracks(result);
       })
@@ -45,7 +45,7 @@ export function MoodsView({ onPlay }: MoodsViewProps) {
         <div>
           <h2 className="section-title">Moods</h2>
           <p className="section-sub">
-            Kumpulan pencarian siap pakai. Hasilnya langsung dari katalog Spotify.
+            Kumpulan pencarian siap pakai. Hasilnya langsung dari katalog Jamendo.
           </p>
         </div>
         <button

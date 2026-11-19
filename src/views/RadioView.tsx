@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import type { Track } from '../types';
-import { loadRadioSeed } from '../lib/spotify';
+import { loadRadioSeed } from '../lib/jamendo';
 import { Artwork } from '../components/Artwork';
 import { IconPlay, IconRadio, IconRefresh } from '../components/Icons';
 
@@ -70,7 +70,7 @@ export function RadioView({ seed, onPlay }: RadioViewProps) {
         <div>
           <h2 className="section-title">Radio</h2>
           <p className="section-sub">
-            Alur lagu dari artis dan album yang sama — bukan rekomendasi AI.
+            Lagu serupa dari Jamendo, lalu diperluas ke artis dan album yang sama.
           </p>
         </div>
         <button

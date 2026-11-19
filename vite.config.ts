@@ -12,14 +12,14 @@ function devApi(): { name: string; configureServer(server: { middlewares: Connec
     configureServer(server) {
       server.middlewares.use(async (req, res, next) => {
         const pathname = (req.url ?? '').split('?')[0];
-        if (pathname !== '/api/spotify' && pathname !== '/api/config') {
+        if (pathname !== '/api/jamendo' && pathname !== '/api/config') {
           next();
           return;
         }
         try {
           const mod = pathname === '/api/config'
             ? await import('./api/config')
-            : await import('./api/spotify');
+            : await import('./api/jamendo');
           await mod.default(req, res);
         } catch (error) {
           res.statusCode = 500;
@@ -45,12 +45,7 @@ export default defineConfig(({ mode }) => {
   return {
     plugins: [react(), devApi()],
     server: {
-      /*
-       * Spotify tidak lagi menerima redirect URI berisi "localhost" (sejak
-       * April 2025) — yang sah hanya loopback literal seperti 127.0.0.1.
-       * Jadi dev server sengaja listen di IPv4 loopback supaya origin-nya
-       * http://127.0.0.1:5173, sama persis dengan yang didaftarkan.
-       */
+      // IPv4 loopback saja: konsisten dengan alamat yang dipakai selama ini.
       host: '127.0.0.1',
       port: 5173,
       strictPort: true,
