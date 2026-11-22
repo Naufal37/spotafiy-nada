@@ -21,7 +21,7 @@ export function MoodsView({ onPlay }: MoodsViewProps) {
     setLoading(true);
     setError(null);
 
-    void searchTracks(active.query, 24)
+    void searchTracks(active.query, 10)
       .then((result) => {
         if (alive) setTracks(result);
       })

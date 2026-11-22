@@ -104,6 +104,16 @@ export default async function handler(
     if (key !== 'endpoint') params.set(key, value);
   });
 
+  /*
+   * Spotify sekarang mengembalikan 400 "Invalid limit" untuk /search dengan
+   * limit > 10. Batasi di proxy juga supaya browser yang masih memuat bundle
+   * lama (limit 12/22/24) tetap bisa menampilkan katalog.
+   */
+  if (endpoint === 'search') {
+    const limit = Number(params.get('limit'));
+    if (Number.isFinite(limit) && limit > 10) params.set('limit', '10');
+  }
+
   const creds = readCreds();
   if (!creds) {
     send(res, 503, {

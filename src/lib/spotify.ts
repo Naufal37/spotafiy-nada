@@ -100,11 +100,18 @@ export interface SearchResponse {
   tracks: { items: (SpotifyTrack | null)[] };
 }
 
-export async function searchTracks(query: string, limit = 24): Promise<Track[]> {
+/**
+ * Endpoint /search Spotify sekarang menolak limit > 10 ("Invalid limit").
+ * Clamp di sini supaya semua pemanggil aman, termasuk pencarian lama yang
+ * masih meminta 12/22/24 lagu.
+ */
+const SEARCH_LIMIT = 10;
+
+export async function searchTracks(query: string, limit = SEARCH_LIMIT): Promise<Track[]> {
   const result = await api<SearchResponse>('search', {
     q: query,
     type: 'track',
-    limit,
+    limit: Math.max(1, Math.min(SEARCH_LIMIT, Math.floor(limit))),
     market: MARKET,
   });
   return (result.tracks?.items ?? [])
@@ -213,7 +220,7 @@ const LISTEN_NOW_QUERIES = [
 /** Isi halaman "Listen now": gabungan beberapa pencarian, tanpa duplikat. */
 export async function loadDiscovery(): Promise<Track[]> {
   const results = await Promise.allSettled(
-    LISTEN_NOW_QUERIES.map((query) => searchTracks(query, 12)),
+    LISTEN_NOW_QUERIES.map((query) => searchTracks(query, SEARCH_LIMIT)),
   );
 
   const seen = new Set<string>();

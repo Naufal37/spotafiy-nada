@@ -46,7 +46,7 @@ export function SearchOverlay({ open, onClose, onPlay, onQueue }: SearchOverlayP
     let alive = true;
     setLoading(true);
     const timer = window.setTimeout(() => {
-      void searchTracks(trimmed, 22)
+      void searchTracks(trimmed, 10)
         .then((tracks) => {
           if (!alive) return;
           setResults(tracks);
