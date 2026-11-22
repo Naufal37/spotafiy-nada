@@ -32,7 +32,7 @@ export function Artwork({ src, seed, alt, className, rounded }: ArtworkProps) {
         role="img"
         aria-label={`${alt} (sampul tidak tersedia)`}
       >
-        <span style={{ fontFamily: 'var(--font-display)', fontSize: '1.6em', opacity: 0.35 }}>
+        <span style={{ fontFamily: 'var(--font-title)', fontSize: '1.6em', opacity: 0.35 }}>
           ♪
         </span>
       </div>

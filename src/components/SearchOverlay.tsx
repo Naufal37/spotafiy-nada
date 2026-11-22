@@ -121,34 +121,17 @@ export function SearchOverlay({ open, onClose, onPlay, onQueue }: SearchOverlayP
         </div>
 
         <div className="search__results">
-          <div
-            style={{
-              padding: '6px 10px 10px',
-              fontSize: 11,
-              color: 'var(--muted-dim)',
-              letterSpacing: '0.04em',
-            }}
-          >
-            {hint}
-          </div>
+          <div className="search__meta">{hint}</div>
 
           {results.map((track, index) => (
             <div
               key={track.id}
               className={`result${index === cursor ? ' is-cursor' : ''}`}
-              style={{ display: 'flex' }}
             >
               <button
                 type="button"
+                className="result__play"
                 onClick={() => onPlay(track, results, index)}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 12,
-                  flex: 1,
-                  minWidth: 0,
-                  textAlign: 'left',
-                }}
                 aria-label={`Putar ${track.title} oleh ${track.artist}`}
               >
                 <Artwork
@@ -158,29 +141,19 @@ export function SearchOverlay({ open, onClose, onPlay, onQueue }: SearchOverlayP
                   alt={track.album}
                 />
                 <span className="result__body">
-                  <span className="result__title" style={{ display: 'block' }}>
+                  <span className="result__title">
                     {track.title}
                     {track.explicit ? <span className="result__tag"> · explicit</span> : null}
                   </span>
-                  <span className="result__sub" style={{ display: 'block' }}>
-                    {track.artist} · {track.album}
-                  </span>
+                  <span className="result__sub">{track.artist} · {track.album}</span>
                 </span>
               </button>
               <button
                 type="button"
+                className="result__queue"
                 onClick={() => onQueue(track)}
                 aria-label={`Tambah ${track.title} ke antrean`}
                 title="Tambah ke antrean"
-                style={{
-                  width: 34,
-                  height: 34,
-                  borderRadius: '50%',
-                  display: 'grid',
-                  placeItems: 'center',
-                  color: 'var(--muted)',
-                  flexShrink: 0,
-                }}
               >
                 <IconPlus size={16} />
               </button>

@@ -24,12 +24,8 @@ export function TrackGrid({ tracks, onPlay }: TrackGridProps) {
             seed={track.id}
             alt={track.album}
           />
-          <span className="track-card__title" style={{ display: 'block' }}>
-            {track.title}
-          </span>
-          <span className="track-card__sub" style={{ display: 'block' }}>
-            {track.artist}
-          </span>
+          <span className="track-card__title">{track.title}</span>
+          <span className="track-card__sub">{track.artist}</span>
           <span className="track-card__play" aria-hidden="true">
             <IconPlay size={16} />
           </span>

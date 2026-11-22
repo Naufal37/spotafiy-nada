@@ -2,7 +2,7 @@
   "name": "nada-music-player",
   "version": "2.0.0",
   "private": true,
-  "description": "Nada — web music player dengan katalog Spotify dan navbar liquid glass",
+  "description": "nada. — web music player Spotify dengan antarmuka gelap ala Spotify Web Player",
   "type": "module",
   "engines": {
     "node": ">=20"
@@ -15,8 +15,7 @@
   },
   "dependencies": {
     "react": "^19.1.0",
-    "react-dom": "^19.1.0",
-    "webgl-liquid-glass": "^0.2.0"
+    "react-dom": "^19.1.0"
   },
   "devDependencies": {
     "@types/node": "^22.10.0",

@@ -51,8 +51,8 @@ export function RadioView({ seed, onPlay }: RadioViewProps) {
             <p className="section-sub">Putar satu lagu dulu, radio akan mengikuti dari situ.</p>
           </div>
         </div>
-        <section className="panel panel--pad">
-          <div className="empty" style={{ minHeight: 280 }}>
+        <section className="content-section">
+          <div className="empty empty--tall">
             <span className="empty__icon" aria-hidden="true">
               <IconRadio size={18} />
             </span>
@@ -83,7 +83,7 @@ export function RadioView({ seed, onPlay }: RadioViewProps) {
         </button>
       </div>
 
-      <section className="panel panel--pad">
+      <section className="content-section">
         <div className="radio-hero">
           <Artwork
             className="radio-hero__art"
@@ -101,22 +101,21 @@ export function RadioView({ seed, onPlay }: RadioViewProps) {
               {seed.artist} · {seed.album}
               {loading ? ' · menyusun antrean…' : ` · ${tracks.length} lagu`}
             </p>
-            <div style={{ display: 'flex', gap: 10, marginTop: 18, flexWrap: 'wrap' }}>
+            <div className="radio-actions">
               <button
                 type="button"
-                className="play-btn"
-                style={{ width: 52, height: 52 }}
+                className="pill pill--primary pill--lg"
                 onClick={() => tracks.length > 0 && onPlay(tracks, 0)}
                 disabled={tracks.length === 0}
-                aria-label="Putar radio"
               >
-                <IconPlay size={20} />
+                <IconPlay size={18} />
+                Putar radio
               </button>
             </div>
           </div>
         </div>
 
-        <div className="queue" style={{ marginTop: 22 }}>
+        <div className="queue queue--list">
           {loading ? (
             Array.from({ length: 6 }).map((_, i) => (
               <div key={i} className="queue-item">
@@ -132,15 +131,8 @@ export function RadioView({ seed, onPlay }: RadioViewProps) {
               <div key={`${track.id}-${index}`} className="queue-item">
                 <button
                   type="button"
+                  className="queue-item__play"
                   onClick={() => onPlay(tracks, index)}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 12,
-                    flex: 1,
-                    minWidth: 0,
-                    textAlign: 'left',
-                  }}
                   aria-label={`Putar ${track.title}`}
                 >
                   <Artwork
@@ -150,18 +142,14 @@ export function RadioView({ seed, onPlay }: RadioViewProps) {
                     alt={track.album}
                   />
                   <span className="queue-item__body">
-                    <span className="queue-item__title" style={{ display: 'block' }}>
-                      {track.title}
-                    </span>
-                    <span className="queue-item__sub" style={{ display: 'block' }}>
-                      {track.artist}
-                    </span>
+                    <span className="queue-item__title">{track.title}</span>
+                    <span className="queue-item__sub">{track.artist}</span>
                   </span>
                 </button>
               </div>
             ))
           ) : (
-            <div className="empty" style={{ minHeight: 180 }}>
+            <div className="empty empty--tall">
               <span className="empty__title">{error ?? 'Tidak ada lagu'}</span>
               <span>Coba susun ulang.</span>
             </div>

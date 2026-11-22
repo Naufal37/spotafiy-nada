@@ -5,15 +5,24 @@ import { TrackGrid } from '../components/TrackGrid';
 import { IconRefresh } from '../components/Icons';
 
 interface MoodsViewProps {
+  initialMoodId?: string | null;
   onPlay: (tracks: Track[], index: number) => void;
 }
 
-export function MoodsView({ onPlay }: MoodsViewProps) {
-  const [active, setActive] = useState<Mood | null>(MOODS[0]);
+export function MoodsView({ initialMoodId, onPlay }: MoodsViewProps) {
+  const [active, setActive] = useState<Mood | null>(() =>
+    MOODS.find((mood) => mood.id === initialMoodId) ?? MOODS[0],
+  );
   const [tracks, setTracks] = useState<Track[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [nonce, setNonce] = useState(0);
+
+  useEffect(() => {
+    if (!initialMoodId) return;
+    const next = MOODS.find((mood) => mood.id === initialMoodId);
+    if (next) setActive(next);
+  }, [initialMoodId]);
 
   useEffect(() => {
     if (!active) return;
@@ -65,14 +74,10 @@ export function MoodsView({ onPlay }: MoodsViewProps) {
             <button
               key={mood.id}
               type="button"
-              className="mood-card"
+              className={`mood-card${selected ? ' is-selected' : ''}`}
               onClick={() => setActive(mood)}
               aria-pressed={selected}
-              style={
-                selected
-                  ? { borderColor: mood.accent, boxShadow: `0 0 0 1px ${mood.accent} inset` }
-                  : undefined
-              }
+              style={{ background: `linear-gradient(135deg, ${mood.accent}, #1f1f1f)` }}
             >
               <span
                 className="mood-card__glow"
@@ -86,10 +91,10 @@ export function MoodsView({ onPlay }: MoodsViewProps) {
         })}
       </div>
 
-      <section className="panel panel--pad">
-        <div className="section-head" style={{ marginBottom: 16 }}>
+      <section className="content-section">
+        <div className="section-head section-head--tight">
           <div>
-            <h3 className="section-title" style={{ fontSize: 20 }}>
+            <h3 className="section-title section-title--sm">
               {active ? active.label : 'Pilih mood'}
             </h3>
             <p className="section-sub">
@@ -100,16 +105,9 @@ export function MoodsView({ onPlay }: MoodsViewProps) {
           </div>
           <button
             type="button"
-            className="link-btn"
+            className="pill pill--primary"
             onClick={() => tracks.length > 0 && onPlay(tracks, 0)}
             disabled={tracks.length === 0}
-            style={{
-              border: '1px solid var(--line)',
-              color: 'var(--text)',
-              padding: '9px 16px',
-              borderRadius: 999,
-              fontWeight: 600,
-            }}
           >
             Putar semua
           </button>
@@ -128,7 +126,7 @@ export function MoodsView({ onPlay }: MoodsViewProps) {
         ) : tracks.length > 0 ? (
           <TrackGrid tracks={tracks} onPlay={(index) => onPlay(tracks, index)} />
         ) : (
-          <div className="empty" style={{ minHeight: 180 }}>
+          <div className="empty empty--tall">
             <span className="empty__title">Tidak ada lagu</span>
             <span>Coba mood lain atau acak ulang.</span>
           </div>

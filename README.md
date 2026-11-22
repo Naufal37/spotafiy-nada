@@ -1,17 +1,18 @@
 # nada.
 
-Pemutar musik malam hari: panel Now Playing besar, panel lirik/antrean, dan
-navbar liquid glass. Katalog lagu diambil dari **Spotify Web API**, lirik dari
-**LRCLIB**, dan semua data pribadi (favorit, playlist, riwayat, volume, mood
-sync) disimpan di `localStorage` browser — tanpa akun sendiri, tanpa database.
+Pemutar musik dengan antarmuka gelap ala **Spotify Web Player**: sidebar
+navigasi, bilah pemutar bawah, panel lirik/antrean, pencarian, Moods, Library,
+dan Radio. Katalog lagu diambil dari **Spotify Web API**, lirik dari **LRCLIB**,
+dan semua data pribadi (favorit, playlist, riwayat, volume, mood sync) disimpan
+di `localStorage` browser — tanpa akun sendiri, tanpa database.
 
-Desain mengikuti spesifikasi **Nocturne** (`design.md`): gelap, neon dusk,
-panel kaca, aksen oranye/pink.
+Desain mengikuti spesifikasi Spotify (`design.md`): kanvas `#121212`,
+color-blocking tanpa shadow, tombol pill, tipografi dan skala spacing yang
+konsisten.
 
 ## Stack
 
 - React 19 + Vite 6 + TypeScript
-- `webgl-liquid-glass` untuk navbar (fallback CSS otomatis kalau WebGL tidak tersedia)
 - Spotify Web API lewat proxy serverless `/api/spotify` (Client Secret aman di server)
 - Web Playback SDK (butuh Spotify Premium) + fallback preview 30 detik
 - LRCLIB untuk lirik (tanpa API key)
@@ -85,18 +86,18 @@ Vercel:
 - Tidak ada lirik karangan: kalau LRCLIB tidak punya lagunya, panel kosong.
 - Tidak ada tombol dekoratif: semua kontrol berfungsi, dan yang belum ada
   sumbernya diberi label jelas.
-- Mood sync hanya mengubah suasana visual (aurora latar), bukan menganalisis audio.
-- `prefers-reduced-motion` dihormati; navbar dan kontrol punya label `aria`.
+- Mood sync hanya mengubah suasana visual, bukan menganalisis audio.
+- `prefers-reduced-motion` dihormati; semua kontrol punya label `aria`.
 
 ## Struktur
 
 ```
 api/            endpoint serverless (config + proxy Spotify), mandiri tanpa import lokal
 src/
-  components/   navbar, Now Playing, side panel, search, visualizer, dll.
+  components/   sidebar, player bar, side panel, search, cards, icons
   lib/          auth PKCE, player, library, storage, lyrics, vibe, spotify client
-  views/        Listen now, Moods, Library, Radio
-  styles/       token & seluruh styling Nocturne
+  views/        Home, Moods, Library, Radio
+  styles/       token & seluruh styling Spotify-inspired
 ```
 
 Data lama (MP3/cover versi sebelumnya) dipindahkan ke

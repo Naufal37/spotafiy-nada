@@ -17,10 +17,8 @@ if (import.meta.env.DEV && window.location.hostname === 'localhost') {
 }
 
 /*
- * Tanpa <StrictMode> di development: navbar memakai WebGL dan library
- * `webgl-liquid-glass` menghancurkan context canvas saat cleanup. StrictMode
- * sengaja menjalankan effect dua kali (mount → cleanup → mount), sehingga
- * canvas yang sama dipakai ulang setelah context-nya hilang dan shader gagal
- * dikompilasi. Build produksi tidak terpengaruh.
+ * Tanpa <StrictMode> di development: efek Web Playback SDK dan audio preview
+ * sengaja tidak dijalankan dua kali (mount → cleanup → mount). Init SDK yang
+ * berulang bisa memicu instance player ganda dan state playback yang membingungkan.
  */
 createRoot(container).render(<App />);

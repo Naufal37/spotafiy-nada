@@ -1,18 +1,20 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import type { Track, ViewId } from './types';
 import { useAuth } from './lib/auth-context';
 import { useLibrary } from './lib/library';
 import { usePlayer } from './lib/player';
 import { loadDiscovery, SpotifyApiError } from './lib/spotify';
-import { TopNavigation } from './components/TopNavigation';
-import { NowPlayingPanel } from './components/NowPlayingPanel';
-import { SidePanel, type SideTab } from './components/SidePanel';
+import { vibeFor } from './lib/vibe';
+import { Sidebar } from './components/Sidebar';
+import { PlayerBar } from './components/PlayerBar';
 import { SearchOverlay } from './components/SearchOverlay';
-import { TrackGrid } from './components/TrackGrid';
+import { SidePanel, type SideTab } from './components/SidePanel';
+import { VibeMetrics } from './components/VibeMetrics';
+import { IconClose, IconMenu, IconSearch, IconSpotify } from './components/Icons';
+import { HomeView } from './views/HomeView';
 import { MoodsView } from './views/MoodsView';
 import { LibraryView } from './views/LibraryView';
 import { RadioView } from './views/RadioView';
-import { IconClose } from './components/Icons';
 
 export function AppShell() {
   const auth = useAuth();
@@ -20,7 +22,10 @@ export function AppShell() {
   const player = usePlayer();
 
   const [view, setView] = useState<ViewId>('listen');
+  const [moodId, setMoodId] = useState<string | null>(null);
   const [searchOpen, setSearchOpen] = useState(false);
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const [drawerOpen, setDrawerOpen] = useState(false);
   const [sideTab, setSideTab] = useState<SideTab>('lyrics');
   const [toast, setToast] = useState<string | null>(null);
   const [setupDismissed, setSetupDismissed] = useState(false);
@@ -45,22 +50,6 @@ export function AppShell() {
     setToast(player.error);
     player.clearError();
   }, [player]);
-
-  useEffect(() => {
-    document.body.classList.toggle('is-syncing', library.moodSync);
-    return () => document.body.classList.remove('is-syncing');
-  }, [library.moodSync]);
-
-  useEffect(() => {
-    const onKey = (event: KeyboardEvent) => {
-      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k') {
-        event.preventDefault();
-        setSearchOpen(true);
-      }
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, []);
 
   useEffect(() => {
     if (!auth.ready) return;
@@ -95,11 +84,14 @@ export function AppShell() {
     };
   }, [auth.ready, auth.spotifyConfigured]);
 
-  const queue = player.queue;
-  const duration = player.durationMs || current?.durationMs || 0;
+  const changeView = (next: ViewId) => {
+    setView(next);
+    setMobileNavOpen(false);
+  };
 
-  const handleSeek = (ratio: number) => {
-    player.seek(ratio * duration);
+  const openPanel = (tab: SideTab) => {
+    setSideTab(tab);
+    setDrawerOpen(true);
   };
 
   const handleShare = async () => {
@@ -122,26 +114,14 @@ export function AppShell() {
   const handleQueueCurrent = () => {
     if (!current) return;
     const added = player.addToQueue(current);
-    notify(
-      added
-        ? 'Lagu ditambahkan ke antrean.'
-        : 'Lagu ini sudah ada di antrean.',
-    );
+    notify(added ? 'Lagu ditambahkan ke antrean.' : 'Lagu ini sudah ada di antrean.');
   };
 
   const handleToggleFavorite = () => {
     if (!current) return;
+    const wasFavorite = library.isFavorite(current.id);
     library.toggleFavorite(current);
-    notify(
-      library.isFavorite(current.id)
-        ? 'Dihapus dari favorit.'
-        : 'Disimpan ke favorit.',
-    );
-  };
-
-  const handleLogout = () => {
-    auth.logout();
-    notify('Keluar dari Spotify. Katalog tetap bisa dipakai.');
+    notify(wasFavorite ? 'Dihapus dari favorit.' : 'Disimpan ke favorit.');
   };
 
   const handleLogin = () => {
@@ -152,188 +132,225 @@ export function AppShell() {
     auth.login();
   };
 
-  const playerPanel = useMemo(
-    () => (
-      <NowPlayingPanel
-        track={current}
-        isPlaying={player.isPlaying}
-        positionMs={player.positionMs}
-        durationMs={duration}
-        volume={player.volume}
-        favorite={current ? library.isFavorite(current.id) : false}
-        disabled={queue.length === 0 && !current}
-        onToggleFavorite={handleToggleFavorite}
-        onShare={() => void handleShare()}
-        onAddToQueue={handleQueueCurrent}
-        onOpenCredits={() => setSideTab('credits')}
-        onSeek={handleSeek}
-        onToggle={player.toggle}
-        onPrevious={player.previous}
-        onNext={player.next}
-        onVolume={player.setVolume}
-      />
-    ),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [current, player, duration, queue.length, library],
-  );
+  const handleLogout = () => {
+    auth.logout();
+    notify('Keluar dari Spotify. Katalog tetap bisa dipakai.');
+  };
+
+  const selectMood = (id: string) => {
+    setMoodId(id);
+    changeView('moods');
+  };
+
+  const vibe = current ? vibeFor(current) : null;
 
   return (
-    <div className="app">
-      <a className="skip-link" href="#main">
-        Lewati ke konten utama
-      </a>
-
-      <TopNavigation
+    <div className={`app-shell${drawerOpen ? ' has-drawer' : ''}`}>
+      <Sidebar
         view={view}
-        onViewChange={setView}
+        onViewChange={changeView}
         onOpenSearch={() => setSearchOpen(true)}
+        favoritesCount={library.favorites.length}
+        recentCount={library.recent.length}
+        playlists={library.playlists}
         moodSync={library.moodSync}
-        onToggleMoodSync={() => {
-          library.setMoodSync(!library.moodSync);
-          notify(
-            library.moodSync
-              ? 'Mood sync mati.'
-              : 'Mood sync nyala — ini hanya efek visual, bukan analisis audio.',
-          );
-        }}
+        onToggleMoodSync={() => library.setMoodSync(!library.moodSync)}
         me={auth.me}
         canLogin={Boolean(auth.clientId)}
         onLogin={handleLogin}
         onLogout={handleLogout}
+        mobileOpen={mobileNavOpen}
+        onCloseMobile={() => setMobileNavOpen(false)}
       />
 
-      {!auth.spotifyConfigured && !setupDismissed ? (
-        <div className="banner" role="status">
-          <div>
-            <strong>Spotify belum tersambung.</strong> Isi <code>SPOTIFY_CLIENT_ID</code> dan{' '}
-            <code>SPOTIFY_CLIENT_SECRET</code> di <code>.env.local</code> (lokal) atau
-            Environment Variables Vercel, lalu restart. Tanpa itu katalog lagu belum bisa dimuat.
-          </div>
+      <div className="main-area">
+        <header className="topbar">
           <button
             type="button"
-            className="banner__close"
-            onClick={() => setSetupDismissed(true)}
-            aria-label="Tutup pemberitahuan"
+            className="icon-btn topbar__menu"
+            onClick={() => setMobileNavOpen(true)}
+            aria-label="Buka navigasi"
           >
-            <IconClose size={14} />
+            <IconMenu size={20} />
           </button>
-        </div>
-      ) : null}
 
-      {auth.spotifyConfigured && !auth.premium && !loginHintDismissed ? (
-        <div className="banner" role="status">
-          <div>
-            <strong>Mode preview.</strong> Login dengan akun Spotify Premium untuk memutar lagu
-            utuh. Tanpa login, hanya lagu yang punya preview 30 detik yang bisa dibunyikan.
-          </div>
-          <button
-            type="button"
-            className="banner__close"
-            onClick={() => setLoginHintDismissed(true)}
-            aria-label="Tutup pemberitahuan"
-          >
-            <IconClose size={14} />
+          <button type="button" className="search-pill" onClick={() => setSearchOpen(true)}>
+            <IconSearch size={18} />
+            <span>Cari lagu, artis, atau album</span>
           </button>
-        </div>
-      ) : null}
 
-      <main id="main" className="main">
-        {view === 'listen' ? (
-        <div className="view">
-          <div className="layout">
-            {playerPanel}
-            <SidePanel
-              track={current}
-              queue={queue}
-              index={player.index}
-              positionMs={player.positionMs}
-              activeTab={sideTab}
-              onTabChange={setSideTab}
-              onPlayAt={player.playAt}
-              onRemoveFromQueue={player.removeFromQueue}
-            />
-          </div>
-
-          <section className="panel panel--pad">
-            <div className="section-head" style={{ marginBottom: 16 }}>
-              <div>
-                <h2 className="section-title" style={{ fontSize: 20 }}>
-                  Pilihan malam ini
-                </h2>
-                <p className="section-sub">
-                  {discoveryError
-                    ? discoveryError
-                    : discoveryLoading
-                      ? 'Menyusun pilihan dari katalog Spotify…'
-                      : `${discovery.length} lagu dari beberapa genre`}
-                </p>
-              </div>
-            </div>
-
-            {discoveryLoading ? (
-              <div className="track-grid">
-                {Array.from({ length: 8 }).map((_, i) => (
-                  <div key={i}>
-                    <div className="sk" style={{ aspectRatio: '1', height: 'auto', borderRadius: 12 }} />
-                    <div className="sk" style={{ marginTop: 10, width: '78%' }} />
-                    <div className="sk" style={{ marginTop: 6, width: '48%', height: 10 }} />
-                  </div>
-                ))}
-              </div>
-            ) : discovery.length > 0 ? (
-              <TrackGrid
-                tracks={discovery}
-                onPlay={(index) => player.playQueue(discovery, index)}
-              />
+          <div className="topbar__right">
+            {auth.premium ? (
+              <span className="premium-badge">
+                <IconSpotify size={15} />
+                Premium
+              </span>
+            ) : null}
+            {auth.me ? (
+              <button
+                type="button"
+                className="avatar-button"
+                onClick={handleLogout}
+                title={`${auth.me.display_name ?? auth.me.id} — klik untuk keluar`}
+                aria-label="Keluar dari Spotify"
+              >
+                {auth.me.images?.[0]?.url ? (
+                  <img className="avatar" src={auth.me.images[0].url} alt="" />
+                ) : (
+                  <IconSpotify size={18} />
+                )}
+              </button>
             ) : (
-              <div className="empty" style={{ minHeight: 160 }}>
-                <span className="empty__title">Belum ada lagu</span>
-                <span>
-                  {auth.spotifyConfigured
-                    ? 'Coba muat ulang halaman, atau cari lagu lewat tombol search.'
-                    : 'Sambungkan Spotify dulu untuk memuat katalog.'}
-                </span>
-              </div>
+              <button type="button" className="pill pill--outline" onClick={handleLogin}>
+                Login
+              </button>
             )}
-          </section>
-        </div>
+          </div>
+        </header>
+
+        <main id="main" className="content">
+          {!auth.spotifyConfigured && !setupDismissed ? (
+            <div className="banner" role="status">
+              <div>
+                <strong>Spotify belum tersambung.</strong> Isi <code>SPOTIFY_CLIENT_ID</code> dan{' '}
+                <code>SPOTIFY_CLIENT_SECRET</code> di <code>.env.local</code> (lokal) atau Environment
+                Variables Vercel, lalu restart. Tanpa itu katalog belum bisa dimuat.
+              </div>
+              <button
+                type="button"
+                className="banner__close"
+                onClick={() => setSetupDismissed(true)}
+                aria-label="Tutup pemberitahuan"
+              >
+                <IconClose size={14} />
+              </button>
+            </div>
+          ) : null}
+
+          {auth.spotifyConfigured && !auth.premium && !loginHintDismissed ? (
+            <div className="banner" role="status">
+              <div>
+                <strong>Mode preview.</strong> Login dengan akun Spotify Premium untuk memutar lagu
+                utuh. Tanpa login, hanya lagu yang punya <code>preview_url</code> yang bisa dibunyikan.
+              </div>
+              <button
+                type="button"
+                className="banner__close"
+                onClick={() => setLoginHintDismissed(true)}
+                aria-label="Tutup pemberitahuan"
+              >
+                <IconClose size={14} />
+              </button>
+            </div>
+          ) : null}
+
+          {view === 'listen' ? (
+            <HomeView
+              discovery={discovery}
+              loading={discoveryLoading}
+              error={discoveryError}
+              recent={library.recent}
+              current={current}
+              onPlayDiscovery={(index) => player.playQueue(discovery, index)}
+              onPlayRecent={(index) => player.playQueue(library.recent, index)}
+              onOpenSearch={() => setSearchOpen(true)}
+              onRetry={() => {
+                setDiscoveryLoading(true);
+                setDiscoveryError(null);
+                void loadDiscovery()
+                  .then(setDiscovery)
+                  .catch((error: unknown) => {
+                    setDiscovery([]);
+                    setDiscoveryError(
+                      error instanceof SpotifyApiError
+                        ? error.message
+                        : 'Tidak bisa memuat katalog Spotify.',
+                    );
+                  })
+                  .finally(() => setDiscoveryLoading(false));
+              }}
+              onSelectMood={selectMood}
+            />
+          ) : null}
+
+          {view === 'moods' ? (
+            <MoodsView
+              initialMoodId={moodId}
+              onPlay={(tracks, index) => player.playQueue(tracks, index)}
+            />
+          ) : null}
+
+          {view === 'library' ? (
+            <LibraryView
+              queue={player.queue}
+              onPlay={(tracks, index) => player.playQueue(tracks, index)}
+              onOpenSearch={() => setSearchOpen(true)}
+            />
+          ) : null}
+
+          {view === 'radio' ? (
+            <RadioView
+              seed={current ?? discovery[0] ?? null}
+              onPlay={(tracks, index) => player.playQueue(tracks, index)}
+            />
+          ) : null}
+        </main>
+      </div>
+
+      {drawerOpen ? (
+        <aside className="now-playing-drawer" aria-label="Detail lagu">
+          <div className="drawer__head">
+            <div>
+              <span className="eyebrow">Sedang diputar</span>
+              <h2 className="drawer__title">{current?.title ?? 'Belum ada lagu'}</h2>
+              {current ? (
+                <p className="drawer__artist">{current.artist} · {current.album}</p>
+              ) : null}
+            </div>
+            <button
+              type="button"
+              className="ctrl-btn"
+              onClick={() => setDrawerOpen(false)}
+              aria-label="Tutup panel lagu"
+            >
+              <IconClose size={18} />
+            </button>
+          </div>
+
+          {vibe ? <VibeMetrics vibe={vibe} /> : null}
+
+          <SidePanel
+            track={current}
+            queue={player.queue}
+            index={player.index}
+            positionMs={player.positionMs}
+            activeTab={sideTab}
+            onTabChange={setSideTab}
+            onPlayAt={player.playAt}
+            onRemoveFromQueue={player.removeFromQueue}
+          />
+        </aside>
       ) : null}
 
-      {view === 'moods' ? (
-        <MoodsView onPlay={(tracks, index) => player.playQueue(tracks, index)} />
-      ) : null}
-
-      {view === 'library' ? (
-        <LibraryView
-          queue={queue}
-          onPlay={(tracks, index) => player.playQueue(tracks, index)}
-          onOpenSearch={() => setSearchOpen(true)}
-        />
-      ) : null}
-
-      {view === 'radio' ? (
-        <RadioView
-          seed={current ?? discovery[0] ?? null}
-          onPlay={(tracks, index) => player.playQueue(tracks, index)}
-        />
-      ) : null}
-      </main>
-
-      <footer
-        style={{
-          marginTop: 'auto',
-          paddingTop: 18,
-          fontSize: 11,
-          color: 'var(--muted-dim)',
-          display: 'flex',
-          gap: 14,
-          flexWrap: 'wrap',
-          justifyContent: 'space-between',
-        }}
-      >
-        <span>nada. — katalog oleh Spotify Web API</span>
-        <span>Lirik oleh LRCLIB · dibuat ulang dari desain Nocturne</span>
-      </footer>
+      <PlayerBar
+        track={current}
+        isPlaying={player.isPlaying}
+        positionMs={player.positionMs}
+        durationMs={player.durationMs}
+        volume={player.volume}
+        engine={player.engine}
+        sdkStatus={player.sdkStatus}
+        favorite={current ? library.isFavorite(current.id) : false}
+        onToggle={player.toggle}
+        onPrevious={player.previous}
+        onNext={player.next}
+        onSeek={player.seek}
+        onVolume={player.setVolume}
+        onToggleFavorite={handleToggleFavorite}
+        onShare={() => void handleShare()}
+        onAddToQueue={handleQueueCurrent}
+        onOpenPanel={openPanel}
+      />
 
       <SearchOverlay
         open={searchOpen}
@@ -344,18 +361,14 @@ export function AppShell() {
         }}
         onQueue={(track) => {
           const added = player.addToQueue(track);
-          notify(
-            added
-              ? `${track.title} masuk antrean.`
-              : `${track.title} sudah ada di antrean.`,
-          );
+          notify(added ? 'Lagu ditambahkan ke antrean.' : 'Lagu ini sudah ada di antrean.');
         }}
       />
 
       {toast ? (
         <div className="toast" role="status">
           <span>{toast}</span>
-          <button type="button" onClick={() => setToast(null)} aria-label="Tutup notifikasi">
+          <button type="button" onClick={() => setToast(null)} aria-label="Tutup pesan">
             <IconClose size={14} />
           </button>
         </div>

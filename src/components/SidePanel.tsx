@@ -164,15 +164,8 @@ export function SidePanel({
                   >
                     <button
                       type="button"
+                      className="queue-item__play"
                       onClick={() => onPlayAt(i)}
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: 12,
-                        flex: 1,
-                        minWidth: 0,
-                        textAlign: 'left',
-                      }}
                       aria-label={`Putar ${item.title} oleh ${item.artist}`}
                     >
                       <Artwork
@@ -182,12 +175,8 @@ export function SidePanel({
                         alt={item.album}
                       />
                       <span className="queue-item__body">
-                        <span className="queue-item__title" style={{ display: 'block' }}>
-                          {item.title}
-                        </span>
-                        <span className="queue-item__sub" style={{ display: 'block' }}>
-                          {item.artist}
-                        </span>
+                        <span className="queue-item__title">{item.title}</span>
+                        <span className="queue-item__sub">{item.artist}</span>
                       </span>
                     </button>
                     <button

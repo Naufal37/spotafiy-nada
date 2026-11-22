@@ -35,10 +35,10 @@ export function LibraryView({ queue, onPlay, onOpenSearch }: LibraryViewProps) {
         </button>
       </div>
 
-      <section className="panel panel--pad">
-        <div className="section-head" style={{ marginBottom: 14 }}>
+      <section className="content-section">
+        <div className="section-head section-head--tight">
           <div>
-            <h3 className="section-title" style={{ fontSize: 19 }}>
+            <h3 className="section-title section-title--sm">
               Favorit
             </h3>
             <p className="section-sub">{favorites.length} lagu disimpan</p>
@@ -48,18 +48,18 @@ export function LibraryView({ queue, onPlay, onOpenSearch }: LibraryViewProps) {
         {favorites.length > 0 ? (
           <TrackGrid tracks={favorites} onPlay={(index) => onPlay(favorites, index)} />
         ) : (
-          <div className="empty" style={{ minHeight: 160 }}>
+          <div className="empty empty--tall">
             <span className="empty__icon" aria-hidden="true">♡</span>
             <span className="empty__title">Belum ada favorit</span>
-            <span>Tekan ikon hati di panel Now Playing untuk menyimpan lagu.</span>
+            <span>Tekan ikon hati di bilah pemutar untuk menyimpan lagu.</span>
           </div>
         )}
       </section>
 
-      <section className="panel panel--pad">
-        <div className="section-head" style={{ marginBottom: 14 }}>
+      <section className="content-section">
+        <div className="section-head section-head--tight">
           <div>
-            <h3 className="section-title" style={{ fontSize: 19 }}>
+            <h3 className="section-title section-title--sm">
               Playlist saya
             </h3>
             <p className="section-sub">{playlists.length} playlist</p>
@@ -76,15 +76,9 @@ export function LibraryView({ queue, onPlay, onOpenSearch }: LibraryViewProps) {
         </div>
 
         {creating ? (
-          <div
-            style={{
-              display: 'flex',
-              gap: 8,
-              marginBottom: 14,
-              flexWrap: 'wrap',
-            }}
-          >
+          <div className="playlist-create">
             <input
+              className="playlist-input"
               value={name}
               onChange={(event) => setName(event.target.value)}
               onKeyDown={(event) => {
@@ -92,36 +86,15 @@ export function LibraryView({ queue, onPlay, onOpenSearch }: LibraryViewProps) {
               }}
               placeholder={`Playlist ${playlists.length + 1}`}
               aria-label="Nama playlist"
-              style={{
-                flex: 1,
-                minWidth: 180,
-                padding: '10px 14px',
-                borderRadius: 12,
-                border: '1px solid var(--line)',
-                background: 'rgba(20,13,20,0.5)',
-                color: 'var(--text)',
-                outline: 'none',
-              }}
             />
-            <button
-              type="button"
-              className="link-btn"
-              onClick={submitPlaylist}
-              style={{
-                border: '1px solid var(--line)',
-                color: 'var(--text)',
-                padding: '9px 16px',
-                borderRadius: 999,
-                fontWeight: 600,
-              }}
-            >
+            <button type="button" className="pill pill--primary" onClick={submitPlaylist}>
               Simpan {queue.length} lagu
             </button>
           </div>
         ) : null}
 
         {playlists.length > 0 ? (
-          <div style={{ display: 'grid', gap: 10 }}>
+          <div className="playlist-list">
             {playlists.map((playlist) => (
               <div key={playlist.id} className="playlist-row">
                 <span className="playlist-row__thumb" aria-hidden="true">
@@ -152,7 +125,7 @@ export function LibraryView({ queue, onPlay, onOpenSearch }: LibraryViewProps) {
             ))}
           </div>
         ) : (
-          <div className="empty" style={{ minHeight: 150 }}>
+          <div className="empty empty--tall">
             <span className="empty__icon" aria-hidden="true">
               <IconPlaylist size={18} />
             </span>
@@ -162,10 +135,10 @@ export function LibraryView({ queue, onPlay, onOpenSearch }: LibraryViewProps) {
         )}
       </section>
 
-      <section className="panel panel--pad">
-        <div className="section-head" style={{ marginBottom: 14 }}>
+      <section className="content-section">
+        <div className="section-head section-head--tight">
           <div>
-            <h3 className="section-title" style={{ fontSize: 19 }}>
+            <h3 className="section-title section-title--sm">
               Terakhir diputar
             </h3>
             <p className="section-sub">{recent.length} lagu</p>
@@ -178,15 +151,8 @@ export function LibraryView({ queue, onPlay, onOpenSearch }: LibraryViewProps) {
               <div key={track.id} className="queue-item">
                 <button
                   type="button"
+                  className="queue-item__play"
                   onClick={() => onPlay(recent, index)}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 12,
-                    flex: 1,
-                    minWidth: 0,
-                    textAlign: 'left',
-                  }}
                   aria-label={`Putar ${track.title}`}
                 >
                   <Artwork
@@ -196,19 +162,15 @@ export function LibraryView({ queue, onPlay, onOpenSearch }: LibraryViewProps) {
                     alt={track.album}
                   />
                   <span className="queue-item__body">
-                    <span className="queue-item__title" style={{ display: 'block' }}>
-                      {track.title}
-                    </span>
-                    <span className="queue-item__sub" style={{ display: 'block' }}>
-                      {track.artist}
-                    </span>
+                    <span className="queue-item__title">{track.title}</span>
+                    <span className="queue-item__sub">{track.artist}</span>
                   </span>
                 </button>
               </div>
             ))}
           </div>
         ) : (
-          <div className="empty" style={{ minHeight: 140 }}>
+          <div className="empty empty--tall">
             <span className="empty__title">Belum ada riwayat</span>
             <span>Lagu yang kamu putar akan muncul di sini.</span>
           </div>
