@@ -1,7 +1,6 @@
 export interface Track {
   id: string;
-  /** Link ke halaman lagu di Jamendo (dipakai tombol share). */
-  sourceUrl: string | null;
+  uri: string | null;
   title: string;
   artist: string;
   artistId: string | null;
@@ -10,65 +9,50 @@ export interface Track {
   artwork: string | null;
   artworkSmall: string | null;
   durationMs: number;
-  /** URL streaming MP3 penuh dari Jamendo, bukan preview 30 detik. */
-  streamUrl: string | null;
+  previewUrl: string | null;
+  explicit: boolean;
   popularity: number;
   releaseYear: string | null;
-  genres: string[];
-  licenseUrl: string | null;
-  licenseLabel: string | null;
   mood?: string;
 }
 
-export interface JamendoImage {
-  url?: string;
-  width?: number;
-  height?: number;
+export interface SpotifyImage {
+  url: string;
+  width: number | null;
+  height: number | null;
 }
 
-export interface JamendoArtist {
+export interface SpotifyArtist {
   id: string;
   name: string;
-  image?: string | JamendoImage;
-  joindate?: string;
-  shareurl?: string;
-  shorturl?: string;
-  website?: string;
+  images?: SpotifyImage[];
+  genres?: string[];
+  followers?: { total: number };
+  popularity?: number;
 }
 
-export interface JamendoAlbum {
+export interface SpotifyAlbum {
   id: string;
   name: string;
-  releasedate?: string;
-  artist_id?: string;
-  artist_name?: string;
-  image?: string | JamendoImage;
-  shareurl?: string;
-  shorturl?: string;
+  images: SpotifyImage[];
+  release_date?: string;
+  release_date_precision?: string;
+  label?: string;
+  total_tracks?: number;
+  artists?: SpotifyArtist[];
+  copyrights?: { text: string; type: string }[];
 }
 
-export interface JamendoTrack {
+export interface SpotifyTrack {
   id: string;
   name: string;
-  duration?: number | string;
-  artist_id?: string;
-  artist_name?: string;
-  album_name?: string;
-  album_id?: string;
-  releasedate?: string;
-  album_image?: string | JamendoImage;
-  image?: string | JamendoImage;
-  audio?: string;
-  license_ccurl?: string;
-  shareurl?: string;
-  shorturl?: string;
-  musicinfo?: {
-    tags?: {
-      genres?: string[];
-      instruments?: string[];
-      vartags?: string[];
-    };
-  };
+  uri: string;
+  duration_ms: number;
+  preview_url: string | null;
+  explicit: boolean;
+  popularity: number;
+  artists: SpotifyArtist[];
+  album: SpotifyAlbum;
 }
 
 export interface LyricLine {

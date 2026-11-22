@@ -1,11 +1,9 @@
 # nada.
 
 Pemutar musik malam hari: panel Now Playing besar, panel lirik/antrean, dan
-navbar liquid glass. Katalog lagu dan **streaming MP3 penuh** diambil dari
-**Jamendo API** (lisensi Creative Commons, gratis, tanpa akun Premium), lirik
-dari **LRCLIB**, dan semua data pribadi (favorit, playlist, riwayat, volume,
-mood sync) disimpan di `localStorage` browser — tanpa akun sendiri, tanpa
-database.
+navbar liquid glass. Katalog lagu diambil dari **Spotify Web API**, lirik dari
+**LRCLIB**, dan semua data pribadi (favorit, playlist, riwayat, volume, mood
+sync) disimpan di `localStorage` browser — tanpa akun sendiri, tanpa database.
 
 Desain mengikuti spesifikasi **Nocturne** (`design.md`): gelap, neon dusk,
 panel kaca, aksen oranye/pink.
@@ -14,8 +12,8 @@ panel kaca, aksen oranye/pink.
 
 - React 19 + Vite 6 + TypeScript
 - `webgl-liquid-glass` untuk navbar (fallback CSS otomatis kalau WebGL tidak tersedia)
-- Jamendo Web API lewat proxy serverless `/api/jamendo` (Client ID aman di server)
-- Pemutar `<audio>` biasa untuk streaming MP3 Jamendo — **tidak perlu Spotify Premium, tidak perlu login**
+- Spotify Web API lewat proxy serverless `/api/spotify` (Client Secret aman di server)
+- Web Playback SDK (butuh Spotify Premium) + fallback preview 30 detik
 - LRCLIB untuk lirik (tanpa API key)
 
 ## Menjalankan lokal
@@ -26,21 +24,14 @@ panel kaca, aksen oranye/pink.
    & "C:\Program Files\nodejs\npm.cmd" install
    ```
 
-2. Dapatkan `client_id` Jamendo (gratis):
-
-   - Buka <https://devportal.jamendo.com>, daftar developer account.
-   - Buat **application** (plan *read only* sudah cukup untuk semua fitur di sini).
-   - Salin **Client ID** aplikasi tersebut.
-   - Catatan: Jamendo menyediakan `709fa152` hanya untuk **testing read API** —
-     boleh dipakai untuk mencoba, tapi sebaiknya pakai ID aplikasi sendiri untuk deploy.
-
-3. Salin `.env.example` menjadi `.env.local`, lalu isi:
+2. Salin `.env.example` menjadi `.env.local`, lalu isi:
 
    ```env
-   JAMENDO_CLIENT_ID=client_id_dari_devportal
+   SPOTIFY_CLIENT_ID=...
+   SPOTIFY_CLIENT_SECRET=...
    ```
 
-4. Jalankan:
+3. Jalankan:
 
    ```powershell
    & "C:\Program Files\nodejs\npm.cmd" run dev
@@ -51,17 +42,27 @@ panel kaca, aksen oranye/pink.
 > Di PowerShell, `npm` bisa diblokir execution policy. Pakai `npm.cmd` seperti
 > contoh di atas, atau `cmd /c npm run dev`.
 
-## Kenapa berhenti pakai Spotify?
+## Membuat aplikasi Spotify
 
-Sejak 2026 Spotify menolak permintaan **katalog** dari aplikasi yang dibuat
-dengan akun Free (HTTP 403 "Active premium subscription required"). Web Playback
-SDK juga hanya bisa memutar lagu utuh di akun Premium, sementara `preview_url`
-sering kosong. Jamendo tidak punya syarat itu: endpoint baca gratis dan setiap
-track punya URL `audio` MP3 yang bisa diputar penuh.
+1. Buka <https://developer.spotify.com/dashboard> → **Create app**.
+2. Isi nama bebas (mis. `nada player`) dan Redirect URI:
+   - `http://127.0.0.1:5173/` untuk lokal (Spotify menolak `localhost` sejak April 2025)
+   - `https://<domain-vercel-kamu>/` untuk produksi
+3. Salin **Client ID** dan **Client Secret**.
+4. Di dashboard Spotify, buka **Settings → User Management** dan tambahkan akun
+   Spotify yang akan dipakai (Developer mode membatasi 25 user).
 
-Konsekuensinya, katalog sekarang berisi musik indie/CC dari Jamendo — bukan lagi
-lagu-lagu mainstream Spotify. Itu trade-off yang disengaja supaya aplikasi tetap
-legal dan bisa dipakai tanpa berlangganan.
+Catatan:
+
+- Katalog, pencarian, artwork, dan halaman Moods **tidak butuh login** — cukup
+  Client ID + Secret di server (Client Credentials).
+- Login Spotify (PKCE) hanya untuk memutar lagu **utuh** lewat Web Playback SDK.
+  Akun harus **Premium**; akun Free hanya dapat preview 30 detik kalau lagunya
+  menyediakan `preview_url` (Spotify sering mengosongkannya).
+- Spotify **Audio Features** sudah ditutup untuk aplikasi baru, jadi angka
+  Energy/Warmth/Tempo di panel "The vibe" adalah **perkiraan dari metadata**
+  (populeritas, tahun rilis, durasi) — bukan analisis audio. Labelnya sudah
+  ditulis jujur di UI.
 
 ## Build & deploy
 
@@ -73,33 +74,30 @@ legal dan bisa dipakai tanpa berlangganan.
 Vercel:
 
 1. Import repo, Framework Preset **Vite** (sudah diatur di `vercel.json`).
-2. Tambahkan Environment Variable `JAMENDO_CLIENT_ID`.
-3. Deploy.
-4. `/api/config` dipakai frontend untuk tahu apakah Jamendo sudah dikonfigurasi;
-   `/api/jamendo` adalah proxy dengan allowlist path (`tracks`,
-   `tracks/similar`, `artists`, `albums`), cache 300 detik, dan pembersihan
-   field `waveform` supaya respons lebih ringan.
+2. Tambahkan Environment Variables `SPOTIFY_CLIENT_ID` dan `SPOTIFY_CLIENT_SECRET`.
+3. Deploy. Tambahkan domain hasil deploy ke Redirect URI aplikasi Spotify.
+4. `/api/config` dipakai frontend untuk tahu apakah Spotify sudah dikonfigurasi;
+   `/api/spotify` adalah proxy dengan allowlist endpoint dan cache 120 detik.
 
 ## Batasan yang disengaja
 
-- Tidak ada login, upload MP3, atau database sendiri. Favorit/playlist/riwayat
-  tetap tersimpan di browser masing-masing.
-- Hanya lagu dengan lisensi Creative Commons/Pro dari Jamendo yang muncul.
+- Tidak ada login admin, upload MP3, atau database sendiri.
 - Tidak ada lirik karangan: kalau LRCLIB tidak punya lagunya, panel kosong.
 - Tidak ada tombol dekoratif: semua kontrol berfungsi, dan yang belum ada
   sumbernya diberi label jelas.
-- Angka Energy/Warmth/Tempo di panel "The vibe" adalah **perkiraan dari metadata**
-  (tahun rilis dan durasi), bukan analisis audio.
 - Mood sync hanya mengubah suasana visual (aurora latar), bukan menganalisis audio.
 - `prefers-reduced-motion` dihormati; navbar dan kontrol punya label `aria`.
 
 ## Struktur
 
 ```
-api/            endpoint serverless (config + proxy Jamendo), mandiri tanpa import lokal
+api/            endpoint serverless (config + proxy Spotify), mandiri tanpa import lokal
 src/
   components/   navbar, Now Playing, side panel, search, visualizer, dll.
-  lib/          jamendo client, player, library, storage, lyrics, vibe
+  lib/          auth PKCE, player, library, storage, lyrics, vibe, spotify client
   views/        Listen now, Moods, Library, Radio
   styles/       token & seluruh styling Nocturne
 ```
+
+Data lama (MP3/cover versi sebelumnya) dipindahkan ke
+`D:\nada-fullstack-backup\uploads` sebelum dihapus dari repo.

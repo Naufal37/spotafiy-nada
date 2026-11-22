@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Track } from '../types';
-import { JamendoApiError, searchTracks } from '../lib/jamendo';
+import { searchTracks, SpotifyApiError } from '../lib/spotify';
 import { Artwork } from './Artwork';
 import { IconPlus, IconSearch } from './Icons';
 
@@ -57,9 +57,9 @@ export function SearchOverlay({ open, onClose, onPlay, onQueue }: SearchOverlayP
           if (!alive) return;
           setResults([]);
           setError(
-            error instanceof JamendoApiError
+            error instanceof SpotifyApiError
               ? error.message
-              : 'Pencarian gagal. Cek koneksi atau konfigurasi Jamendo.',
+              : 'Pencarian gagal. Cek koneksi atau konfigurasi Spotify.',
           );
         })
         .finally(() => {
@@ -88,7 +88,7 @@ export function SearchOverlay({ open, onClose, onPlay, onQueue }: SearchOverlayP
       className="overlay"
       role="dialog"
       aria-modal="true"
-      aria-label="Cari lagu di Jamendo"
+      aria-label="Cari lagu di Spotify"
       onMouseDown={(event) => {
         if (event.target === event.currentTarget) onClose();
       }}
@@ -160,7 +160,7 @@ export function SearchOverlay({ open, onClose, onPlay, onQueue }: SearchOverlayP
                 <span className="result__body">
                   <span className="result__title" style={{ display: 'block' }}>
                     {track.title}
-                    {track.genres[0] ? <span className="result__tag"> · {track.genres[0]}</span> : null}
+                    {track.explicit ? <span className="result__tag"> · explicit</span> : null}
                   </span>
                   <span className="result__sub" style={{ display: 'block' }}>
                     {track.artist} · {track.album}

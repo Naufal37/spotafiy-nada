@@ -25,20 +25,32 @@ export function writeJson(key: string, value: unknown): void {
   }
 }
 
-/** Data lama dari versi Spotify tidak punya streamUrl dan tidak bisa diputar. */
-const isPlayable = (track: Track): boolean => Boolean(track?.streamUrl);
+/**
+ * Data dari versi Jamendo punya `streamUrl` tapi tidak punya `uri`, jadi tidak
+ * bisa diputar oleh pemutar Spotify. Saring supaya favorit/playlist lama tidak
+ * bikin error saat dibuka kembali setelah balik ke Spotify.
+ */
+function isSpotifyTrack(value: unknown): value is Track {
+  if (!value || typeof value !== 'object') return false;
+  const track = value as Partial<Track>;
+  return typeof track.uri === 'string' && track.uri.length > 0;
+}
+
+function loadTracks(key: string): Track[] {
+  return readJson<Track[]>(key, []).filter(isSpotifyTrack);
+}
 
 export const storage = {
-  loadFavorites: (): Track[] => readJson<Track[]>(FAVORITES_KEY, []).filter(isPlayable),
+  loadFavorites: (): Track[] => loadTracks(FAVORITES_KEY),
   saveFavorites: (tracks: Track[]) => writeJson(FAVORITES_KEY, tracks.slice(0, 200)),
 
-  loadRecent: (): Track[] => readJson<Track[]>(RECENT_KEY, []).filter(isPlayable),
+  loadRecent: (): Track[] => loadTracks(RECENT_KEY),
   saveRecent: (tracks: Track[]) => writeJson(RECENT_KEY, tracks.slice(0, 30)),
 
   loadPlaylists: (): Playlist[] =>
     readJson<Playlist[]>(PLAYLISTS_KEY, []).map((playlist) => ({
       ...playlist,
-      tracks: Array.isArray(playlist.tracks) ? playlist.tracks.filter(isPlayable) : [],
+      tracks: Array.isArray(playlist.tracks) ? playlist.tracks.filter(isSpotifyTrack) : [],
     })),
   savePlaylists: (playlists: Playlist[]) => writeJson(PLAYLISTS_KEY, playlists),
 
@@ -48,6 +60,6 @@ export const storage = {
   },
   saveVolume: (value: number) => writeJson(VOLUME_KEY, value),
 
-  loadQueue: (): Track[] => readJson<Track[]>(QUEUE_KEY, []).filter(isPlayable),
+  loadQueue: (): Track[] => loadTracks(QUEUE_KEY),
   saveQueue: (tracks: Track[]) => writeJson(QUEUE_KEY, tracks.slice(0, 80)),
 };

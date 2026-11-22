@@ -5,8 +5,10 @@ import {
   IconMoods,
   IconRadio,
   IconSearch,
+  IconSpotify,
 } from './Icons';
 import { GlassNav } from './GlassNav';
+import type { SpotifyMe } from '../lib/auth';
 
 interface TopNavigationProps {
   view: ViewId;
@@ -14,6 +16,10 @@ interface TopNavigationProps {
   onOpenSearch: () => void;
   moodSync: boolean;
   onToggleMoodSync: () => void;
+  me: SpotifyMe | null;
+  canLogin: boolean;
+  onLogin: () => void;
+  onLogout: () => void;
 }
 
 const NAV_ITEMS = [
@@ -29,6 +35,10 @@ export function TopNavigation({
   onOpenSearch,
   moodSync,
   onToggleMoodSync,
+  me,
+  canLogin,
+  onLogin,
+  onLogout,
 }: TopNavigationProps) {
   return (
     <header className="topbar">
@@ -79,16 +89,36 @@ export function TopNavigation({
           <IconLibrary size={19} />
         </button>
 
-        <a
-          className="icon-btn"
-          href="https://www.jamendo.com"
-          target="_blank"
-          rel="noreferrer"
-          title="Katalog musik oleh Jamendo"
-          aria-label="Buka Jamendo"
-        >
-          <IconRadio size={18} />
-        </a>
+        {me ? (
+          <button
+            type="button"
+            className="icon-btn"
+            onClick={onLogout}
+            title={`Terhubung sebagai ${me.display_name ?? me.id} — klik untuk keluar`}
+            aria-label="Keluar dari Spotify"
+          >
+            {me.images?.[0]?.url ? (
+              <img className="avatar" src={me.images[0].url} alt="" />
+            ) : (
+              <IconSpotify size={18} />
+            )}
+          </button>
+        ) : (
+          <button
+            type="button"
+            className="icon-btn icon-btn--login"
+            onClick={onLogin}
+            disabled={!canLogin}
+            title={
+              canLogin
+                ? 'Login Spotify Premium untuk memutar lagu utuh'
+                : 'Isi SPOTIFY_CLIENT_ID dulu untuk mengaktifkan login'
+            }
+          >
+            <IconSpotify size={16} />
+            <span>Login</span>
+          </button>
+        )}
       </div>
     </header>
   );

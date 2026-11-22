@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import type { JamendoAlbum, JamendoArtist, Track } from '../types';
-import { getAlbum, getArtist } from '../lib/jamendo';
+import type { SpotifyAlbum, SpotifyArtist, Track } from '../types';
 import { activeLyricIndex, fetchLyrics } from '../lib/lyrics';
+import { getAlbum, getArtist } from '../lib/spotify';
 import { Artwork } from './Artwork';
 import { IconClose, IconInfo, IconLyrics, IconQueue } from './Icons';
 
@@ -223,8 +223,8 @@ export function SidePanel({
 }
 
 function CreditsPanel({ track }: { track: Track | null }) {
-  const [artist, setArtist] = useState<JamendoArtist | null>(null);
-  const [album, setAlbum] = useState<JamendoAlbum | null>(null);
+  const [artist, setArtist] = useState<SpotifyArtist | null>(null);
+  const [album, setAlbum] = useState<SpotifyAlbum | null>(null);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
@@ -290,13 +290,29 @@ function CreditsPanel({ track }: { track: Track | null }) {
         </div>
         <div className="credits__row">
           <span className="credits__key">Rilis</span>
-          <span className="credits__value">{album?.releasedate ?? track.releaseYear ?? '—'}</span>
+          <span className="credits__value">{album?.release_date ?? track.releaseYear ?? '—'}</span>
         </div>
-        {track.genres.length > 0 ? (
+        <div className="credits__row">
+          <span className="credits__key">Label</span>
+          <span className="credits__value">{album?.label ?? '—'}</span>
+        </div>
+        <div className="credits__row">
+          <span className="credits__key">Durasi</span>
+          <span className="credits__value">{Math.round(track.durationMs / 1000)} detik</span>
+        </div>
+        {typeof artist?.followers?.total === 'number' ? (
+          <div className="credits__row">
+            <span className="credits__key">Pengikut</span>
+            <span className="credits__value">
+              {new Intl.NumberFormat('id-ID').format(artist.followers.total)}
+            </span>
+          </div>
+        ) : null}
+        {artist?.genres && artist.genres.length > 0 ? (
           <div className="credits__row">
             <span className="credits__key">Genre</span>
             <span className="credits__value genres">
-              {track.genres.slice(0, 6).map((genre) => (
+              {artist.genres.slice(0, 6).map((genre) => (
                 <span key={genre} className="genre">
                   {genre}
                 </span>
@@ -304,43 +320,15 @@ function CreditsPanel({ track }: { track: Track | null }) {
             </span>
           </div>
         ) : null}
-        <div className="credits__row">
-          <span className="credits__key">Durasi</span>
-          <span className="credits__value">{Math.round(track.durationMs / 1000)} detik</span>
-        </div>
-        <div className="credits__row">
-          <span className="credits__key">Lisensi</span>
-          <span className="credits__value">
-            {track.licenseUrl ? (
-              <a href={track.licenseUrl} target="_blank" rel="noreferrer">
-                {track.licenseLabel ?? 'Lihat lisensi'}
-              </a>
-            ) : (
-              track.licenseLabel ?? '—'
-            )}
-          </span>
-        </div>
-        {artist?.shareurl ? (
+        {album?.copyrights && album.copyrights.length > 0 ? (
           <div className="credits__row">
-            <span className="credits__key">Profil artis</span>
-            <span className="credits__value">
-              <a href={artist.shareurl} target="_blank" rel="noreferrer">
-                Halaman Jamendo
-              </a>
-            </span>
+            <span className="credits__key">Hak cipta</span>
+            <span className="credits__value">{album.copyrights[0].text}</span>
           </div>
         ) : null}
         <div className="credits__row">
           <span className="credits__key">Sumber</span>
-          <span className="credits__value">
-            {track.sourceUrl ? (
-              <a href={track.sourceUrl} target="_blank" rel="noreferrer">
-                Jamendo
-              </a>
-            ) : (
-              'Jamendo'
-            )}
-          </span>
+          <span className="credits__value">Spotify Web API</span>
         </div>
       </div>
     </div>

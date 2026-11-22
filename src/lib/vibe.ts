@@ -18,9 +18,9 @@ function hash(input: string): number {
 }
 
 /**
- * Jamendo tidak menyediakan Audio Features, jadi energy/warmth/tempo di sini
- * adalah angka stabil yang diperkirakan dari metadata lagu (tahun rilis dan
- * durasi) — bukan hasil analisis audio.
+ * Spotify menutup endpoint Audio Features untuk aplikasi baru (akhir 2024),
+ * jadi energy/warmth/tempo di sini adalah perkiraan dari metadata lagu
+ * (popularitas, tahun rilis, panjang lagu) — bukan hasil analisis audio.
  * UI menampilkan ini sebagai "perkiraan", bukan fakta.
  */
 export function vibeFor(track: Track): Vibe {
