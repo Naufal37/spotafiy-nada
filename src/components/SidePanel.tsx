@@ -59,14 +59,29 @@ export function SidePanel({
   );
 
   useEffect(() => {
-    if (activeIndex < 0) return;
+    if (activeIndex < 0 || activeTab !== 'lyrics') return;
     const container = scrollRef.current;
     if (!container) return;
+
     const node = container.querySelector<HTMLElement>(`[data-lyric="${activeIndex}"]`);
     if (!node) return;
-    const target = node.offsetTop - container.clientHeight / 2 + node.clientHeight / 2;
-    container.scrollTo({ top: Math.max(0, target), behavior: 'smooth' });
-  }, [activeIndex]);
+
+    /*
+     * Ukur posisi relatif terhadap kontainer scroll, bukan offsetTop.
+     * offsetTop bisa dihitung dari ancestor lain (drawer/body), sehingga lirik
+     * aktif terdorong ke atas dan terasa "tidak terfokus".
+     */
+    const containerRect = container.getBoundingClientRect();
+    const nodeRect = node.getBoundingClientRect();
+    const nodeTop = nodeRect.top - containerRect.top + container.scrollTop;
+    const target = nodeTop - (container.clientHeight - nodeRect.height) / 2;
+    const maxScroll = Math.max(0, container.scrollHeight - container.clientHeight);
+
+    container.scrollTo({
+      top: Math.min(maxScroll, Math.max(0, target)),
+      behavior: 'smooth',
+    });
+  }, [activeIndex, activeTab, lyricsState, track?.id]);
 
   return (
     <aside className="panel side-panel" aria-label="Lirik dan antrean">
