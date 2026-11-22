@@ -1,5 +1,4 @@
 import type { Track } from '../types';
-import { MOODS } from '../lib/spotify';
 import { Artwork } from '../components/Artwork';
 import { TrackGrid } from '../components/TrackGrid';
 import { IconPlay, IconRefresh, IconSearch } from '../components/Icons';
@@ -14,7 +13,6 @@ interface HomeViewProps {
   onPlayRecent: (index: number) => void;
   onOpenSearch: () => void;
   onRetry: () => void;
-  onSelectMood: (moodId: string) => void;
 }
 
 export function HomeView({
@@ -27,7 +25,6 @@ export function HomeView({
   onPlayRecent,
   onOpenSearch,
   onRetry,
-  onSelectMood,
 }: HomeViewProps) {
   const heroTrack = current ?? discovery[0] ?? null;
 
@@ -67,32 +64,6 @@ export function HomeView({
             alt={heroTrack.album}
           />
         ) : null}
-      </section>
-
-      <section className="content-section" aria-labelledby="mood-tiles-title">
-        <div className="section-head">
-          <div>
-            <h2 className="section-title" id="mood-tiles-title">Suasana</h2>
-            <p className="section-sub">Pilih nuansa, kami carikan lagunya dari Spotify.</p>
-          </div>
-        </div>
-        <div className="mood-grid">
-          {MOODS.slice(0, 6).map((mood) => (
-            <button
-              key={mood.id}
-              type="button"
-              className="mood-card"
-              onClick={() => onSelectMood(mood.id)}
-              style={{ background: `linear-gradient(135deg, ${mood.accent}, #1f1f1f)` }}
-            >
-              <span className="mood-card__label">{mood.label}</span>
-              <span className="mood-card__desc">{mood.description}</span>
-              <span className="mood-card__play" aria-hidden="true">
-                <IconPlay size={18} />
-              </span>
-            </button>
-          ))}
-        </div>
       </section>
 
       <section className="content-section" aria-labelledby="discovery-title">

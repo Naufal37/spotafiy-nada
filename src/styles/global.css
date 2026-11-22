@@ -296,6 +296,25 @@ a {
   font-weight: 700;
 }
 
+.nav-item__badge {
+  display: grid;
+  place-items: center;
+  min-width: 22px;
+  height: 22px;
+  margin-left: auto;
+  padding: 0 6px;
+  border-radius: var(--radius-full);
+  background: var(--surface-raised);
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.nav-item.is-active .nav-item__badge {
+  background: var(--canvas);
+  color: var(--text);
+}
+
 .sidebar__library {
   flex: 1;
   min-height: 0;
@@ -383,41 +402,6 @@ a {
   display: grid;
   gap: var(--space-sm);
   padding: var(--space-sm) var(--space-lg) var(--space-lg);
-}
-
-.sync {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: var(--space-xs);
-  height: 32px;
-  padding: 0 var(--space-md);
-  border: 1px solid var(--hairline);
-  border-radius: var(--radius-full);
-  color: var(--text-secondary);
-  font-size: 13px;
-  font-weight: 700;
-}
-
-.sync:hover {
-  color: var(--text);
-  text-decoration: underline;
-}
-
-.sync__dot {
-  width: 8px;
-  height: 8px;
-  border-radius: var(--radius-full);
-  background: var(--text-muted);
-}
-
-.sync[aria-pressed='true'] {
-  border-color: var(--accent);
-  color: var(--text);
-}
-
-.sync[aria-pressed='true'] .sync__dot {
-  background: var(--accent);
 }
 
 .account-btn {
@@ -812,83 +796,6 @@ a {
   opacity: 1;
 }
 
-.mood-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
-  gap: var(--space-sm);
-}
-
-.mood-card {
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  justify-content: flex-end;
-  min-height: 132px;
-  padding: var(--space-md);
-  border-radius: var(--radius-sm);
-  background: var(--surface-active);
-  overflow: hidden;
-  text-align: left;
-  transition: opacity 0.16s var(--ease);
-}
-
-.mood-card:hover:not(:disabled) {
-  opacity: 0.88;
-}
-
-.mood-card.is-selected {
-  outline: 2px solid var(--text);
-  outline-offset: -2px;
-}
-
-.mood-card__glow {
-  position: absolute;
-  right: -28px;
-  bottom: -52px;
-  width: 140px;
-  height: 140px;
-  border-radius: var(--radius-full);
-  opacity: 0.32;
-  pointer-events: none;
-}
-
-.mood-card__label,
-.mood-card__desc,
-.mood-card__play {
-  position: relative;
-  z-index: 1;
-}
-
-.mood-card__label {
-  font-family: var(--font-title);
-  font-size: 18px;
-  font-weight: 700;
-}
-
-.mood-card__desc {
-  margin-top: var(--space-xxs);
-  color: rgba(255, 255, 255, 0.72);
-  font-size: 12px;
-}
-
-.mood-card__play {
-  display: grid;
-  place-items: center;
-  width: 35px;
-  height: 35px;
-  margin-top: var(--space-sm);
-  border-radius: var(--radius-full);
-  background: var(--text);
-  color: var(--canvas);
-  opacity: 0;
-  transition: opacity 0.16s var(--ease);
-}
-
-.mood-card:hover .mood-card__play,
-.mood-card.is-selected .mood-card__play {
-  opacity: 1;
-}
-
 .empty {
   display: flex;
   flex-direction: column;
@@ -1039,7 +946,7 @@ a {
 }
 
 /* ==========================================================================
-   Rows, lists, radio, library details
+   Rows, lists, library details
    ========================================================================== */
 
 .queue {
@@ -1135,38 +1042,6 @@ a {
 .queue-item__action:hover {
   background: var(--surface-raised);
   color: var(--text);
-}
-
-.radio-hero {
-  display: flex;
-  align-items: center;
-  gap: var(--space-xl);
-  padding: var(--space-xl);
-  border-radius: var(--radius-md);
-  background: linear-gradient(90deg, #4a3449, #1f1f1f 72%);
-}
-
-.radio-hero__art {
-  display: block;
-  flex: none;
-  width: 160px;
-  height: 160px;
-  border-radius: var(--radius-sm);
-  object-fit: cover;
-  background: var(--surface-active);
-}
-
-.radio-hero__title {
-  margin: var(--space-xs) 0 var(--space-xxs);
-  font-family: var(--font-title);
-  font-size: 32px;
-  font-weight: 800;
-  line-height: 1.15;
-  overflow-wrap: anywhere;
-}
-
-.radio-actions {
-  margin-top: var(--space-lg);
 }
 
 .chip {
@@ -1915,20 +1790,6 @@ a {
     opacity: 0.5;
   }
 
-  .radio-hero {
-    align-items: flex-start;
-    flex-direction: column;
-  }
-
-  .radio-hero__art {
-    width: 120px;
-    height: 120px;
-  }
-
-  .radio-hero__title {
-    font-size: 24px;
-  }
-
   .now-playing-drawer {
     top: 0;
     right: 0;
@@ -2006,10 +1867,6 @@ a {
 
   .track-grid {
     grid-template-columns: repeat(auto-fill, minmax(132px, 1fr));
-  }
-
-  .mood-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .hero {

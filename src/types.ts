@@ -13,7 +13,6 @@ export interface Track {
   explicit: boolean;
   popularity: number;
   releaseYear: string | null;
-  mood?: string;
 }
 
 export interface SpotifyImage {
@@ -67,4 +66,4 @@ export interface Playlist {
   createdAt: number;
 }
 
-export type ViewId = 'listen' | 'moods' | 'library' | 'radio';
+export type ViewId = 'listen' | 'library';

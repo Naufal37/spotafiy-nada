@@ -12,9 +12,7 @@ import { SidePanel, type SideTab } from './components/SidePanel';
 import { VibeMetrics } from './components/VibeMetrics';
 import { IconClose, IconMenu, IconSearch, IconSpotify } from './components/Icons';
 import { HomeView } from './views/HomeView';
-import { MoodsView } from './views/MoodsView';
 import { LibraryView } from './views/LibraryView';
-import { RadioView } from './views/RadioView';
 
 export function AppShell() {
   const auth = useAuth();
@@ -22,7 +20,6 @@ export function AppShell() {
   const player = usePlayer();
 
   const [view, setView] = useState<ViewId>('listen');
-  const [moodId, setMoodId] = useState<string | null>(null);
   const [searchOpen, setSearchOpen] = useState(false);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -137,11 +134,6 @@ export function AppShell() {
     notify('Keluar dari Spotify. Katalog tetap bisa dipakai.');
   };
 
-  const selectMood = (id: string) => {
-    setMoodId(id);
-    changeView('moods');
-  };
-
   const vibe = current ? vibeFor(current) : null;
 
   return (
@@ -153,8 +145,6 @@ export function AppShell() {
         favoritesCount={library.favorites.length}
         recentCount={library.recent.length}
         playlists={library.playlists}
-        moodSync={library.moodSync}
-        onToggleMoodSync={() => library.setMoodSync(!library.moodSync)}
         me={auth.me}
         canLogin={Boolean(auth.clientId)}
         onLogin={handleLogin}
@@ -269,14 +259,6 @@ export function AppShell() {
                   })
                   .finally(() => setDiscoveryLoading(false));
               }}
-              onSelectMood={selectMood}
-            />
-          ) : null}
-
-          {view === 'moods' ? (
-            <MoodsView
-              initialMoodId={moodId}
-              onPlay={(tracks, index) => player.playQueue(tracks, index)}
             />
           ) : null}
 
@@ -285,13 +267,6 @@ export function AppShell() {
               queue={player.queue}
               onPlay={(tracks, index) => player.playQueue(tracks, index)}
               onOpenSearch={() => setSearchOpen(true)}
-            />
-          ) : null}
-
-          {view === 'radio' ? (
-            <RadioView
-              seed={current ?? discovery[0] ?? null}
-              onPlay={(tracks, index) => player.playQueue(tracks, index)}
             />
           ) : null}
         </main>

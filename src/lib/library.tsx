@@ -19,8 +19,6 @@ interface LibraryApi {
   playlists: Playlist[];
   createPlaylist: (name: string, tracks: Track[]) => Playlist;
   deletePlaylist: (id: string) => void;
-  moodSync: boolean;
-  setMoodSync: (value: boolean) => void;
 }
 
 const LibraryContext = createContext<LibraryApi | null>(null);
@@ -29,13 +27,6 @@ export function LibraryProvider({ children }: { children: ReactNode }) {
   const [favorites, setFavorites] = useState<Track[]>(() => storage.loadFavorites());
   const [recent, setRecent] = useState<Track[]>(() => storage.loadRecent());
   const [playlists, setPlaylists] = useState<Playlist[]>(() => storage.loadPlaylists());
-  const [moodSync, setMoodSyncState] = useState(() => {
-    try {
-      return localStorage.getItem('nada.v2.moodsync') !== 'off';
-    } catch {
-      return true;
-    }
-  });
 
   useEffect(() => storage.saveFavorites(favorites), [favorites]);
   useEffect(() => storage.saveRecent(recent), [recent]);
@@ -73,15 +64,6 @@ export function LibraryProvider({ children }: { children: ReactNode }) {
     setPlaylists((previous) => previous.filter((playlist) => playlist.id !== id));
   }, []);
 
-  const setMoodSync = useCallback((value: boolean) => {
-    setMoodSyncState(value);
-    try {
-      localStorage.setItem('nada.v2.moodsync', value ? 'on' : 'off');
-    } catch {
-      /* abaikan */
-    }
-  }, []);
-
   const value = useMemo<LibraryApi>(
     () => ({
       favorites,
@@ -92,8 +74,6 @@ export function LibraryProvider({ children }: { children: ReactNode }) {
       playlists,
       createPlaylist,
       deletePlaylist,
-      moodSync,
-      setMoodSync,
     }),
     [
       favorites,
@@ -104,8 +84,6 @@ export function LibraryProvider({ children }: { children: ReactNode }) {
       playlists,
       createPlaylist,
       deletePlaylist,
-      moodSync,
-      setMoodSync,
     ],
   );
 

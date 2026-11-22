@@ -1,10 +1,10 @@
 # nada.
 
 Pemutar musik dengan antarmuka gelap ala **Spotify Web Player**: sidebar
-navigasi, bilah pemutar bawah, panel lirik/antrean, pencarian, Moods, Library,
-dan Radio. Katalog lagu diambil dari **Spotify Web API**, lirik dari **LRCLIB**,
-dan semua data pribadi (favorit, playlist, riwayat, volume, mood sync) disimpan
-di `localStorage` browser — tanpa akun sendiri, tanpa database.
+navigasi, bilah pemutar bawah, panel lirik/antrean, pencarian, Home, dan
+Playlists. Katalog lagu diambil dari **Spotify Web API**, lirik dari **LRCLIB**,
+dan semua data pribadi (favorit, playlist, riwayat, volume) disimpan di
+`localStorage` browser — tanpa akun sendiri, tanpa database.
 
 Desain mengikuti spesifikasi Spotify (`design.md`): kanvas `#121212`,
 color-blocking tanpa shadow, tombol pill, tipografi dan skala spacing yang
@@ -55,8 +55,8 @@ konsisten.
 
 Catatan:
 
-- Katalog, pencarian, artwork, dan halaman Moods **tidak butuh login** — cukup
-  Client ID + Secret di server (Client Credentials).
+- Katalog, pencarian, dan artwork **tidak butuh login** — cukup Client ID +
+  Secret di server (Client Credentials).
 - Login Spotify (PKCE) hanya untuk memutar lagu **utuh** lewat Web Playback SDK.
   Akun harus **Premium**; akun Free hanya dapat preview 30 detik kalau lagunya
   menyediakan `preview_url` (Spotify sering mengosongkannya).
@@ -96,7 +96,7 @@ api/            endpoint serverless (config + proxy Spotify), mandiri tanpa impo
 src/
   components/   sidebar, player bar, side panel, search, cards, icons
   lib/          auth PKCE, player, library, storage, lyrics, vibe, spotify client
-  views/        Home, Moods, Library, Radio
+  views/        Home, Library (Playlists)
   styles/       token & seluruh styling Spotify-inspired
 ```
 

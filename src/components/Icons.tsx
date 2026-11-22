@@ -27,37 +27,6 @@ export function IconListen(props: IconProps) {
   );
 }
 
-export function IconMoods(props: IconProps) {
-  return (
-    <svg {...base(props)}>
-      <path d="m12 3 1.9 4.6L18.5 9.5l-4.6 1.9L12 16l-1.9-4.6L5.5 9.5l4.6-1.9L12 3Z" />
-      <path d="M18.5 15.5 19.4 18l2.5.9-2.5.9-.9 2.5-.9-2.5-2.5-.9 2.5-.9.9-2.5Z" />
-    </svg>
-  );
-}
-
-export function IconLibrary(props: IconProps) {
-  return (
-    <svg {...base(props)}>
-      <path d="M4 5.5A1.5 1.5 0 0 1 5.5 4H9v16H5.5A1.5 1.5 0 0 1 4 18.5v-13Z" />
-      <path d="M12 4v16" />
-      <path d="M15 4.8 19 5.6l-1.6 14.1-4-.8L15 4.8Z" />
-    </svg>
-  );
-}
-
-export function IconRadio(props: IconProps) {
-  return (
-    <svg {...base(props)}>
-      <circle cx="12" cy="12" r="2" />
-      <path d="M7.8 16.2a6 6 0 0 1 0-8.4" />
-      <path d="M16.2 7.8a6 6 0 0 1 0 8.4" />
-      <path d="M4.9 19.1a10 10 0 0 1 0-14.2" />
-      <path d="M19.1 4.9a10 10 0 0 1 0 14.2" />
-    </svg>
-  );
-}
-
 export function IconSearch(props: IconProps) {
   return (
     <svg {...base(props)}>

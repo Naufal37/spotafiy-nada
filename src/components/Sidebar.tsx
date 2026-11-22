@@ -3,11 +3,9 @@ import type { SpotifyMe } from '../lib/auth';
 import {
   IconClose,
   IconHeart,
-  IconLibrary,
   IconListen,
-  IconMoods,
+  IconPlaylist,
   IconPlus,
-  IconRadio,
   IconSearch,
   IconSpotify,
 } from './Icons';
@@ -19,8 +17,6 @@ interface SidebarProps {
   favoritesCount: number;
   recentCount: number;
   playlists: { id: string; name: string; tracks: unknown[] }[];
-  moodSync: boolean;
-  onToggleMoodSync: () => void;
   me: SpotifyMe | null;
   canLogin: boolean;
   onLogin: () => void;
@@ -31,9 +27,7 @@ interface SidebarProps {
 
 const NAV_ITEMS: { id: ViewId; label: string; icon: typeof IconListen }[] = [
   { id: 'listen', label: 'Home', icon: IconListen },
-  { id: 'moods', label: 'Moods', icon: IconMoods },
-  { id: 'library', label: 'Your Library', icon: IconLibrary },
-  { id: 'radio', label: 'Radio', icon: IconRadio },
+  { id: 'library', label: 'Playlists', icon: IconPlaylist },
 ];
 
 export function Sidebar({
@@ -43,8 +37,6 @@ export function Sidebar({
   favoritesCount,
   recentCount,
   playlists,
-  moodSync,
-  onToggleMoodSync,
   me,
   canLogin,
   onLogin,
@@ -105,6 +97,9 @@ export function Sidebar({
               >
                 <Icon size={22} />
                 <span>{item.label}</span>
+                {item.id === 'library' && playlists.length > 0 ? (
+                  <span className="nav-item__badge">{playlists.length}</span>
+                ) : null}
               </button>
             );
           })}
@@ -175,17 +170,6 @@ export function Sidebar({
         </section>
 
         <div className="sidebar__bottom">
-          <button
-            type="button"
-            className="sync"
-            aria-pressed={moodSync}
-            onClick={onToggleMoodSync}
-            title="Mood sync hanya mengubah suasana tampilan, bukan analisis audio."
-          >
-            <span className="sync__dot" aria-hidden="true" />
-            Mood sync
-          </button>
-
           {me ? (
             <button
               type="button"

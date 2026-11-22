@@ -127,86 +127,9 @@ export async function getArtist(id: string): Promise<SpotifyArtist> {
   return api<SpotifyArtist>(`artists/${id}`);
 }
 
-export async function getArtistTopTracks(id: string): Promise<Track[]> {
-  const result = await api<{ tracks: SpotifyTrack[] }>(`artists/${id}/top-tracks`, {
-    market: MARKET,
-  });
-  return (result.tracks ?? []).map(toTrack);
-}
-
-export async function getArtistAlbums(id: string, limit = 8): Promise<SpotifyAlbum[]> {
-  const result = await api<{ items: SpotifyAlbum[] }>(`artists/${id}/albums`, {
-    include_groups: 'album,single',
-    limit,
-    market: MARKET,
-  });
-  return result.items ?? [];
-}
-
 export async function getAlbum(id: string): Promise<SpotifyAlbum> {
   return api<SpotifyAlbum>(`albums/${id}`, { market: MARKET });
 }
-
-export async function getAlbumTracks(id: string, limit = 12): Promise<Track[]> {
-  const result = await api<{ items: SpotifyTrack[] }>(`albums/${id}/tracks`, {
-    limit,
-    market: MARKET,
-  });
-  return (result.items ?? []).map(toTrack);
-}
-
-export interface Mood {
-  id: string;
-  label: string;
-  query: string;
-  description: string;
-  accent: string;
-}
-
-export const MOODS: Mood[] = [
-  {
-    id: 'chill',
-    label: 'Chill',
-    query: 'chill acoustic',
-    description: 'Gitar akustik, tempo santai, cocok buat sore.',
-    accent: '#8B4C83',
-  },
-  {
-    id: 'energised',
-    label: 'Energised',
-    query: 'energetic pop hits',
-    description: 'Buat yang butuh dorongan buat mulai gerak.',
-    accent: '#F45A9A',
-  },
-  {
-    id: 'focus',
-    label: 'Focus',
-    query: 'lofi study beats',
-    description: 'Instrumental tanpa distraksi buat kerja.',
-    accent: '#FFB45B',
-  },
-  {
-    id: 'late-night',
-    label: 'Late night',
-    query: 'late night rnb',
-    description: 'Lampu mati, headphone nyala.',
-    accent: '#6B4CFF',
-  },
-  {
-    id: 'warm',
-    label: 'Warm',
-    query: 'soul jazz',
-    description: 'Brass, groove, dan rasa hangat.',
-    accent: '#FF8A5B',
-  },
-  {
-    id: 'neon',
-    label: 'Neon',
-    query: 'synthwave retrowave',
-    description: 'Sintesis 80-an, kabut ungu, jalanan basah.',
-    accent: '#4CD7E0',
-  },
-];
 
 const LISTEN_NOW_QUERIES = [
   'indie pop',
@@ -239,43 +162,5 @@ export async function loadDiscovery(): Promise<Track[]> {
     if (failure && failure.status === 'rejected') throw failure.reason;
   }
 
-  return merged;
-}
-
-/** Radio: benih dari satu lagu, lalu melebar ke artis + album terkait. */
-export async function loadRadioSeed(track: Track): Promise<Track[]> {
-  const buckets: Track[][] = [];
-
-  if (track.artistId) {
-    try {
-      buckets.push(await getArtistTopTracks(track.artistId));
-    } catch {
-      /* lanjut ke sumber lain */
-    }
-  }
-
-  if (track.albumId) {
-    try {
-      buckets.push(await getAlbumTracks(track.albumId, 10));
-    } catch {
-      /* lanjut */
-    }
-  }
-
-  try {
-    buckets.push(await searchTracks(`${track.artist} ${track.album}`, 10));
-  } catch {
-    /* lanjut */
-  }
-
-  const seen = new Set<string>([track.id]);
-  const merged: Track[] = [track];
-  for (const bucket of buckets) {
-    for (const item of bucket) {
-      if (seen.has(item.id)) continue;
-      seen.add(item.id);
-      merged.push(item);
-    }
-  }
   return merged;
 }
