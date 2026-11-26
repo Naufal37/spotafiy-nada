@@ -1,7 +1,7 @@
-# Lagu import lokal (efek 8D / 10D)
+# Lagu import lokal (efek 10D)
 
 Folder ini dipakai aplikasi **nada.** untuk lagu-lagu yang diputar lewat jalur
-lokal, bukan Spotify. Jalur lokal bisa diproses Web Audio, jadi efek 8D
+lokal, bukan Spotify. Jalur lokal bisa diproses Web Audio, jadi efek 10D
 (binaural/spatial) benar-benar berlaku di sini.
 
 ## Menambah lagu
@@ -46,8 +46,8 @@ Tombol di pemutar
 berubah dari **8D** jadi **Split** dan bisa mematikan efek supaya kembali ke mix
 normal.
 
-Untuk lagu tanpa stem, efek 8D memakai `PannerNode` HRTF yang mengorbit
-mengelilingi kepala tiap 6 detik, bukan sekadar StereoPanner.
+Untuk lagu tanpa stem, efek 10D memakai `PannerNode` HRTF yang mengorbit
+mengelilingi kepala tiap ~8 detik, bukan sekadar StereoPanner.
 
 ## Efek sudah tertanam di file
 
@@ -70,12 +70,31 @@ Aplikasi membaca daftar ini dari `/audio/imports/manifest.json`. Karena satu
 origin dengan halaman, tidak ada masalah CORS dan file bisa langsung masuk
 `AudioContext`.
 
-## Efek 8D
+## Efek 10D (di-model dari NEON – A2O LITE)
 
-Tombol **8D** di bilah pemutar mengaktifkan/mematikan efek. Perpindahannya
-pakai `setTargetAtTime` (crossfade kering–basah) dan perputaran pan mengikuti
-gelombang sinus, jadi tidak ada suara "klik" atau lompatan mendadak. Status
-tombol disimpan di `localStorage`.
+Parameter efek diukur dari file referensi `a2o-lite-neon-10d.mp3`:
+
+- Modulasi keseimbangan kiri/kanan ~0,128 Hz → **satu putaran ~8 detik**.
+- ITD (perbedaan waktu antar telinga) mencapai **±0,7–1 ms** dan berubah tanda,
+  ciri khas *binaural panner* HRTF yang berputar.
+- Bass di bawah ~200 Hz hampir mono (korelasi L/R ~0,92), jadi crossover
+  **lowpass 200 Hz** dilewatkan lurus dan hanya mid/high yang di-orbitkan.
+- Tidak ada slapback/echo 120 ms yang jelas; delay sengaja dikecilkan jadi
+  early reflection ~35 ms dengan feedback 0,08 supaya tidak mengganggu bass.
+
+Tombol **10D** di bilah pemutar mengaktifkan/mematikan efek. Perpindahannya
+pakai `setTargetAtTime` (crossfade kering–basah), jadi tidak ada suara "klik"
+atau lompatan mendadak. Status tombol disimpan di `localStorage`.
+
+File yang efek 10D-nya sudah tertanam (seperti NEON) tetap diputar apa adanya
+dan tombolnya dinonaktifkan — efek di atas dipakai untuk lagu import lainnya.
+
+Untuk mengukur lagu referensi lain:
+
+```bash
+python -m pip install numpy imageio-ffmpeg
+python scripts/analyze_spatial.py public/audio/imports/nama-lagu.mp3
+```
 
 > Vite menyalin seluruh isi `public/` ke `dist/` saat build. File di sini ikut
 > ter-deploy ke Vercel — jangan taruh file privat di folder ini.

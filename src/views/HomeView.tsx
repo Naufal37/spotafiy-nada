@@ -77,8 +77,8 @@ export function HomeView({
               <h2 className="section-title" id="local-title">Lagu import</h2>
               <p className="section-sub">
                 Koleksi lokal. Lagu yang sudah dipisah memutar vokal dan instrumen bergantian di
-                telinga kiri/kanan; sisanya memakai efek 8D binaural. Lagu berlabel 10D sudah punya
-                efek di file dan diputar apa adanya.
+                telinga kiri/kanan; sisanya memakai efek 10D binaural (orbit ~8 detik, bass tetap di
+                tengah). Lagu berlabel 10D dari file sudah punya efek dan diputar apa adanya.
               </p>
             </div>
           </div>

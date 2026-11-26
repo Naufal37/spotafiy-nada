@@ -273,7 +273,11 @@ export function PlayerProvider({ clientId, premium, onTrackStart, children }: Pl
     };
   }, [audio, localAudio, vocalAudio, instrumentalAudio]);
 
-  /** Graf Web Audio untuk efek 8D. Dibuat sekali saat lagu lokal pertama diputar. */
+  /**
+   * Graf Web Audio untuk efek 10D. Dibuat sekali saat lagu lokal pertama diputar.
+   * Parameter orbit/crossover mengikuti hasil bedah file NEON (A2O LITE):
+   * putaran ~8 detik, ITD ±0,7–1 ms, bass tetap di tengah.
+   */
   const ensureGraph = useCallback(() => {
     if (graphRef.current) return graphRef.current;
     const Ctor =
@@ -283,6 +287,8 @@ export function PlayerProvider({ clientId, premium, onTrackStart, children }: Pl
 
     const ctx = new Ctor();
     const source = ctx.createMediaElementSource(localAudio);
+    const bass = ctx.createBiquadFilter();
+    const high = ctx.createBiquadFilter();
     const dry = ctx.createGain();
     const wet = ctx.createGain();
     // HRTF bikin suara benar-benar berputar mengelilingi kepala, bukan cuma
@@ -296,9 +302,21 @@ export function PlayerProvider({ clientId, premium, onTrackStart, children }: Pl
     const feedback = ctx.createGain();
     const master = ctx.createGain();
 
-    source.connect(dry);
+    // Di file referensi, bass hampir mono (korelasi L/R ~0,92) dan yang berputar
+    // terutama mid/high. Jadi bass dilewatkan lurus, sisanya yang di-orbitkan.
+    bass.type = 'lowpass';
+    bass.frequency.value = 200;
+    bass.Q.value = 0.7;
+    high.type = 'highpass';
+    high.frequency.value = 200;
+    high.Q.value = 0.7;
+
+    source.connect(bass);
+    bass.connect(master);
+    source.connect(high);
+    high.connect(dry);
     dry.connect(master);
-    source.connect(panner);
+    high.connect(panner);
     panner.connect(delay);
     delay.connect(feedback);
     feedback.connect(delay);
@@ -308,8 +326,9 @@ export function PlayerProvider({ clientId, premium, onTrackStart, children }: Pl
 
     dry.gain.value = spatialRef.current ? 0 : 1;
     wet.gain.value = spatialRef.current ? 1 : 0;
-    feedback.gain.value = 0.16;
-    delay.delayTime.value = 0.12;
+    // Early reflection tipis, bukan slapback 120 ms yang bikin bass kerasa berantakan.
+    feedback.gain.value = 0.08;
+    delay.delayTime.value = 0.035;
     master.gain.value = volumeRef.current;
 
     const graph: SpatialGraph = { ctx, dry, wet, panner, master, frame: 0 };
@@ -320,12 +339,13 @@ export function PlayerProvider({ clientId, premium, onTrackStart, children }: Pl
       const active = graphRef.current;
       if (!active) return;
       const elapsed = active.ctx.currentTime - startedAt;
-      const angle = (elapsed * Math.PI * 2) / 6;
+      // ~8 detik per putaran, mengikuti modulasi pan file referensi (~0,128 Hz).
+      const angle = (elapsed * Math.PI * 2) / 8;
       const now = active.ctx.currentTime;
       // Orbit mengelilingi listener; setTargetAtTime menghaluskan tiap frame.
-      active.panner.positionX.setTargetAtTime(Math.cos(angle) * 1.1, now, 0.04);
-      active.panner.positionY.setTargetAtTime(Math.sin(angle * 2) * 0.3, now, 0.04);
-      active.panner.positionZ.setTargetAtTime(Math.sin(angle) * 1.1, now, 0.04);
+      active.panner.positionX.setTargetAtTime(Math.cos(angle) * 1.15, now, 0.04);
+      active.panner.positionY.setTargetAtTime(Math.sin(angle * 2) * 0.15, now, 0.04);
+      active.panner.positionZ.setTargetAtTime(Math.sin(angle) * 1.15, now, 0.04);
       active.frame = requestAnimationFrame(animate);
     };
     graph.frame = requestAnimationFrame(animate);

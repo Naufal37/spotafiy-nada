@@ -71,7 +71,7 @@ export function PlayerBar({
   const disabled = !track;
   const hasStems = Boolean(track?.stems);
   const hasBakedEffects = Boolean(track?.preserveEffects);
-  const modeLabel = hasBakedEffects ? '10D' : hasStems ? 'Split' : '8D';
+  const modeLabel = hasBakedEffects ? '10D' : hasStems ? 'Split' : '10D';
   const engineLabel =
     engine === 'raw'
       ? '10D · Lagu import'
@@ -85,7 +85,7 @@ export function PlayerBar({
           : 'Stem (split mati)'
         : engine === 'local'
           ? spatial
-            ? '8D · Lagu import'
+            ? '10D · Lagu import'
             : 'Lagu import'
           : engine === 'preview'
             ? 'Preview 30 detik'
@@ -251,8 +251,8 @@ export function PlayerBar({
               : hasStems
                 ? 'Vokal kiri, instrumen kanan — bergantian tiap 10 detik'
                 : track?.streamUrl
-                  ? 'Efek 8D (spatial binaural) untuk lagu import'
-                  : 'Efek 8D hanya untuk lagu import'
+                  ? 'Efek 10D binaural: orbit ~8 detik, bass tetap tengah'
+                  : 'Efek 10D hanya untuk lagu import'
           }
         >
           {modeLabel}
