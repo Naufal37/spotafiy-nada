@@ -19,20 +19,59 @@ interface SpatialGraph {
   ctx: AudioContext;
   dry: GainNode;
   wet: GainNode;
-  panner: StereoPannerNode;
+  panner: PannerNode;
   master: GainNode;
   frame: number;
 }
 
 interface StemGraph {
   ctx: AudioContext;
-  vocalPanner: StereoPannerNode;
-  instrumentalPanner: StereoPannerNode;
+  vocalLeft: GainNode;
+  vocalRight: GainNode;
+  instrumentalLeft: GainNode;
+  instrumentalRight: GainNode;
   master: GainNode;
   /** 1 = vokal kiri / instrumen kanan, -1 = sebaliknya. */
   side: number;
   nextSwap: number;
   frame: number;
+}
+
+/** Ramp linear yang aman walau ramp sebelumnya masih berjalan. */
+function rampParam(param: AudioParam, target: number, now: number, duration: number): void {
+  if (typeof param.cancelAndHoldAtTime === 'function') {
+    param.cancelAndHoldAtTime(now);
+  } else {
+    const current = param.value;
+    param.cancelScheduledValues(now);
+    param.setValueAtTime(current, now);
+  }
+  param.linearRampToValueAtTime(target, now + duration);
+}
+
+/**
+ * Mixer 2x2: tiap stem masuk ke kanal kiri/kanan lewat gain terpisah.
+ * Swap sisi = crossfade gain, bukan memutar pan — jadi tidak lewat tengah.
+ */
+function setStemMix(graph: StemGraph, enabled: boolean, duration: number): void {
+  const target = enabled
+    ? graph.side > 0
+      ? { vl: 1, vr: 0, il: 0, ir: 1 }
+      : { vl: 0, vr: 1, il: 1, ir: 0 }
+    : { vl: 0.5, vr: 0.5, il: 0.5, ir: 0.5 };
+
+  const now = graph.ctx.currentTime;
+  const pairs: [GainNode, number][] = [
+    [graph.vocalLeft, target.vl],
+    [graph.vocalRight, target.vr],
+    [graph.instrumentalLeft, target.il],
+    [graph.instrumentalRight, target.ir],
+  ];
+
+  for (const [node, value] of pairs) {
+    if (duration <= 0) node.gain.value = value;
+    else rampParam(node.gain, value, now, duration);
+  }
 }
 
 export interface PlayerApi {
@@ -210,7 +249,13 @@ export function PlayerProvider({ clientId, premium, onTrackStart, children }: Pl
     const source = ctx.createMediaElementSource(localAudio);
     const dry = ctx.createGain();
     const wet = ctx.createGain();
-    const panner = ctx.createStereoPanner();
+    // HRTF bikin suara benar-benar berputar mengelilingi kepala, bukan cuma
+    // digeser kiri-kanan seperti StereoPanner.
+    const panner = ctx.createPanner();
+    panner.panningModel = 'HRTF';
+    panner.distanceModel = 'inverse';
+    panner.refDistance = 1;
+    panner.rolloffFactor = 0.2;
     const delay = ctx.createDelay(1);
     const feedback = ctx.createGain();
     const master = ctx.createGain();
@@ -239,19 +284,19 @@ export function PlayerProvider({ clientId, premium, onTrackStart, children }: Pl
       const active = graphRef.current;
       if (!active) return;
       const elapsed = active.ctx.currentTime - startedAt;
-      // Satu putaran penuh ~9 detik. setTargetAtTime bikin perpindahan halus.
-      active.panner.pan.setTargetAtTime(
-        Math.sin((elapsed * Math.PI * 2) / 9) * 0.85,
-        active.ctx.currentTime,
-        0.09,
-      );
+      const angle = (elapsed * Math.PI * 2) / 6;
+      const now = active.ctx.currentTime;
+      // Orbit mengelilingi listener; setTargetAtTime menghaluskan tiap frame.
+      active.panner.positionX.setTargetAtTime(Math.cos(angle) * 1.1, now, 0.04);
+      active.panner.positionY.setTargetAtTime(Math.sin(angle * 2) * 0.3, now, 0.04);
+      active.panner.positionZ.setTargetAtTime(Math.sin(angle) * 1.1, now, 0.04);
       active.frame = requestAnimationFrame(animate);
     };
     graph.frame = requestAnimationFrame(animate);
     return graph;
   }, [localAudio]);
 
-  /** Graf untuk vokal/instrumen terpisah: pan hard kiri–kanan yang bergantian. */
+  /** Graf untuk vokal/instrumen terpisah: mixer 2x2 dengan hard L/R. */
   const ensureStemGraph = useCallback(() => {
     if (stemGraphRef.current) return stemGraphRef.current;
     const Ctor =
@@ -262,21 +307,32 @@ export function PlayerProvider({ clientId, premium, onTrackStart, children }: Pl
     const ctx = new Ctor();
     const vocalSource = ctx.createMediaElementSource(vocalAudio);
     const instrumentalSource = ctx.createMediaElementSource(instrumentalAudio);
-    const vocalPanner = ctx.createStereoPanner();
-    const instrumentalPanner = ctx.createStereoPanner();
+    const merger = ctx.createChannelMerger(2);
+    const vocalLeft = ctx.createGain();
+    const vocalRight = ctx.createGain();
+    const instrumentalLeft = ctx.createGain();
+    const instrumentalRight = ctx.createGain();
     const master = ctx.createGain();
 
-    vocalSource.connect(vocalPanner);
-    vocalPanner.connect(master);
-    instrumentalSource.connect(instrumentalPanner);
-    instrumentalPanner.connect(master);
+    // Stereo otomatis di-downmix ke satu kanal saat masuk input merger.
+    vocalSource.connect(vocalLeft);
+    vocalSource.connect(vocalRight);
+    instrumentalSource.connect(instrumentalLeft);
+    instrumentalSource.connect(instrumentalRight);
+    vocalLeft.connect(merger, 0, 0);
+    vocalRight.connect(merger, 0, 1);
+    instrumentalLeft.connect(merger, 0, 0);
+    instrumentalRight.connect(merger, 0, 1);
+    merger.connect(master);
     master.connect(ctx.destination);
     master.gain.value = volumeRef.current;
 
     const graph: StemGraph = {
       ctx,
-      vocalPanner,
-      instrumentalPanner,
+      vocalLeft,
+      vocalRight,
+      instrumentalLeft,
+      instrumentalRight,
       master,
       side: 1,
       nextSwap: ctx.currentTime + 6,
@@ -284,23 +340,7 @@ export function PlayerProvider({ clientId, premium, onTrackStart, children }: Pl
     };
     stemGraphRef.current = graph;
 
-    const applySides = (smooth: number) => {
-      const active = stemGraphRef.current;
-      if (!active) return;
-      const now = active.ctx.currentTime;
-      active.vocalPanner.pan.setTargetAtTime(
-        spatialRef.current ? -0.9 * active.side : 0,
-        now,
-        smooth,
-      );
-      active.instrumentalPanner.pan.setTargetAtTime(
-        spatialRef.current ? 0.9 * active.side : 0,
-        now,
-        smooth,
-      );
-    };
-
-    applySides(0.01);
+    setStemMix(graph, spatialRef.current, 0);
 
     const animate = () => {
       const active = stemGraphRef.current;
@@ -308,7 +348,8 @@ export function PlayerProvider({ clientId, premium, onTrackStart, children }: Pl
       if (spatialRef.current && active.ctx.currentTime >= active.nextSwap) {
         active.side *= -1;
         active.nextSwap = active.ctx.currentTime + 6;
-        applySides(0.35);
+        // 0,7 detik crossfade — cukup lambat untuk halus, cepat untuk kerasa.
+        setStemMix(active, true, 0.7);
       }
       active.frame = requestAnimationFrame(animate);
     };
@@ -491,6 +532,10 @@ export function PlayerProvider({ clientId, premium, onTrackStart, children }: Pl
         await graph.ctx.resume();
         localAudio.src = track.streamUrl;
         localAudio.currentTime = 0;
+        const fadeStart = graph.ctx.currentTime;
+        graph.master.gain.cancelScheduledValues(fadeStart);
+        graph.master.gain.setValueAtTime(0, fadeStart);
+        graph.master.gain.linearRampToValueAtTime(volumeRef.current, fadeStart + 0.35);
         setEngine('local');
         setDurationMs(track.durationMs);
         setPositionMs(0);
@@ -517,16 +562,11 @@ export function PlayerProvider({ clientId, premium, onTrackStart, children }: Pl
         instrumentalAudio.currentTime = 0;
         graph.side = 1;
         graph.nextSwap = graph.ctx.currentTime + 6;
-        graph.vocalPanner.pan.setTargetAtTime(
-          spatialRef.current ? -0.9 : 0,
-          graph.ctx.currentTime,
-          0.05,
-        );
-        graph.instrumentalPanner.pan.setTargetAtTime(
-          spatialRef.current ? 0.9 : 0,
-          graph.ctx.currentTime,
-          0.05,
-        );
+        setStemMix(graph, spatialRef.current, 0.05);
+        const fadeStart = graph.ctx.currentTime;
+        graph.master.gain.cancelScheduledValues(fadeStart);
+        graph.master.gain.setValueAtTime(0, fadeStart);
+        graph.master.gain.linearRampToValueAtTime(volumeRef.current, fadeStart + 0.35);
         setEngine('stems');
         setDurationMs(track.durationMs);
         setPositionMs(0);
@@ -738,18 +778,14 @@ export function PlayerProvider({ clientId, premium, onTrackStart, children }: Pl
     if (graph) {
       // Crossfade kering → basah supaya efek nyala/mati tanpa klik.
       const now = graph.ctx.currentTime;
-      graph.dry.gain.cancelScheduledValues(now);
-      graph.wet.gain.cancelScheduledValues(now);
-      graph.dry.gain.setTargetAtTime(next ? 0 : 1, now, 0.18);
-      graph.wet.gain.setTargetAtTime(next ? 1 : 0, now, 0.18);
+      rampParam(graph.dry.gain, next ? 0 : 1, now, 0.4);
+      rampParam(graph.wet.gain, next ? 1 : 0, now, 0.4);
     }
 
     const stem = stemGraphRef.current;
     if (stem) {
       // Matikan efek = kedua stem kembali ke tengah (mix normal).
-      const now = stem.ctx.currentTime;
-      stem.vocalPanner.pan.setTargetAtTime(next ? -0.9 * stem.side : 0, now, 0.3);
-      stem.instrumentalPanner.pan.setTargetAtTime(next ? 0.9 * stem.side : 0, now, 0.3);
+      setStemMix(stem, next, 0.45);
     }
   }, []);
 

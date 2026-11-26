@@ -39,10 +39,14 @@ Kalau lagu sudah dipisah (misalnya dengan Demucs), tambahkan `stems`:
 }
 ```
 
-Lagu dengan `stems` diputar dari kedua file secara sinkron: vokal di satu
-telinga, instrumen di telinga lainnya, lalu kedua sisi ditukar tiap 6 detik
-dengan transisi halus. Tombol di pemutar berubah dari **8D** jadi **Split**
-dan bisa mematikan efek supaya kembali ke mix normal.
+Lagu dengan `stems` diputar dari kedua file secara sinkron: vokal **hard-left**,
+instrumen **hard-right**, lalu kedua sisi ditukar tiap 6 detik lewat crossfade
+gain 0,7 detik (bukan pan biasa, jadi tidak melewati tengah). Tombol di pemutar
+berubah dari **8D** jadi **Split** dan bisa mematikan efek supaya kembali ke mix
+normal.
+
+Untuk lagu tanpa stem, efek 8D memakai `PannerNode` HRTF yang mengorbit
+mengelilingi kepala tiap 6 detik, bukan sekadar StereoPanner.
 
 Aplikasi membaca daftar ini dari `/audio/imports/manifest.json`. Karena satu
 origin dengan halaman, tidak ada masalah CORS dan file bisa langsung masuk

@@ -89,8 +89,9 @@ Vercel:
 - Tidak ada tombol dekoratif: semua kontrol berfungsi, dan yang belum ada
   sumbernya diberi label jelas.
 - Mood sync hanya mengubah suasana visual, bukan menganalisis audio.
-- Efek 8D hanya berlaku untuk lagu import: Spotify SDK tidak bisa di-routing
-  ke Web Audio, jadi efek tidak dipaksakan ke lagu Spotify.
+- Efek 8D (HRTF orbit) hanya berlaku untuk lagu import: Spotify SDK tidak bisa
+  di-routing ke Web Audio, jadi efek tidak dipaksakan ke lagu Spotify.
+- Mode Split memakai crossfade gain antar kanal kiri/kanan, bukan pan biasa.
 - Stem vokal/instrumen hasil Demucs disimpan lokal di `public/audio/imports/`
   dan tidak otomatis di-commit kalau tidak mau dipublish.
 - `prefers-reduced-motion` dihormati; semua kontrol punya label `aria`.
