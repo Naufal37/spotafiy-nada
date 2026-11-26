@@ -74,6 +74,41 @@ function setStemMix(graph: StemGraph, enabled: boolean, duration: number): void 
   }
 }
 
+/**
+ * Tukar kanal dengan equal-power crossfade. Cos/sin menjaga volume tetap
+ * konstan di tengah transisi, jadi tidak terasa "mentok" lalu lompat.
+ */
+function swapStemSides(graph: StemGraph): void {
+  const from = graph.side;
+  const to = -from;
+  const now = graph.ctx.currentTime;
+  const duration = 1.8;
+  const points = 64;
+  const fadeOut = new Float32Array(points);
+  const fadeIn = new Float32Array(points);
+  for (let i = 0; i < points; i += 1) {
+    const phase = (i / (points - 1)) * (Math.PI / 2);
+    fadeOut[i] = Math.cos(phase);
+    fadeIn[i] = Math.sin(phase);
+  }
+
+  const wasLeftVocal = from > 0;
+  const assign = (param: AudioParam, start: number, end: number) => {
+    param.cancelScheduledValues(now);
+    if (start === 1 && end === 0) param.setValueCurveAtTime(fadeOut, now, duration);
+    else if (start === 0 && end === 1) param.setValueCurveAtTime(fadeIn, now, duration);
+    else rampParam(param, end, now, duration);
+  };
+
+  assign(graph.vocalLeft.gain, wasLeftVocal ? 1 : 0, wasLeftVocal ? 0 : 1);
+  assign(graph.vocalRight.gain, wasLeftVocal ? 0 : 1, wasLeftVocal ? 1 : 0);
+  assign(graph.instrumentalLeft.gain, wasLeftVocal ? 0 : 1, wasLeftVocal ? 1 : 0);
+  assign(graph.instrumentalRight.gain, wasLeftVocal ? 1 : 0, wasLeftVocal ? 0 : 1);
+
+  graph.side = to;
+  graph.nextSwap = now + duration + 10;
+}
+
 export interface PlayerApi {
   queue: Track[];
   index: number;
@@ -335,7 +370,7 @@ export function PlayerProvider({ clientId, premium, onTrackStart, children }: Pl
       instrumentalRight,
       master,
       side: 1,
-      nextSwap: ctx.currentTime + 6,
+      nextSwap: ctx.currentTime + 10,
       frame: 0,
     };
     stemGraphRef.current = graph;
@@ -346,10 +381,7 @@ export function PlayerProvider({ clientId, premium, onTrackStart, children }: Pl
       const active = stemGraphRef.current;
       if (!active) return;
       if (spatialRef.current && active.ctx.currentTime >= active.nextSwap) {
-        active.side *= -1;
-        active.nextSwap = active.ctx.currentTime + 6;
-        // 0,7 detik crossfade — cukup lambat untuk halus, cepat untuk kerasa.
-        setStemMix(active, true, 0.7);
+        swapStemSides(active);
       }
       active.frame = requestAnimationFrame(animate);
     };
@@ -561,7 +593,7 @@ export function PlayerProvider({ clientId, premium, onTrackStart, children }: Pl
         vocalAudio.currentTime = 0;
         instrumentalAudio.currentTime = 0;
         graph.side = 1;
-        graph.nextSwap = graph.ctx.currentTime + 6;
+        graph.nextSwap = graph.ctx.currentTime + 10;
         setStemMix(graph, spatialRef.current, 0.05);
         const fadeStart = graph.ctx.currentTime;
         graph.master.gain.cancelScheduledValues(fadeStart);

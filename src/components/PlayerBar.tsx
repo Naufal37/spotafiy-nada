@@ -244,7 +244,7 @@ export function PlayerBar({
           aria-label={spatial ? `Matikan efek ${modeLabel}` : `Nyalakan efek ${modeLabel}`}
           title={
             hasStems
-              ? 'Vokal kiri, instrumen kanan — bergantian tiap 6 detik'
+              ? 'Vokal kiri, instrumen kanan — bergantian tiap 10 detik'
               : track?.streamUrl
                 ? 'Efek 8D (spatial binaural) untuk lagu import'
                 : 'Efek 8D hanya untuk lagu import'

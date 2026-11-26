@@ -40,8 +40,9 @@ Kalau lagu sudah dipisah (misalnya dengan Demucs), tambahkan `stems`:
 ```
 
 Lagu dengan `stems` diputar dari kedua file secara sinkron: vokal **hard-left**,
-instrumen **hard-right**, lalu kedua sisi ditukar tiap 6 detik lewat crossfade
-gain 0,7 detik (bukan pan biasa, jadi tidak melewati tengah). Tombol di pemutar
+instrumen **hard-right**, lalu kedua sisi ditukar tiap 10 detik lewat
+*equal-power crossfade* 1,8 detik (cos/sin, volume tidak turun di tengah).
+Tombol di pemutar
 berubah dari **8D** jadi **Split** dan bisa mematikan efek supaya kembali ke mix
 normal.
 
