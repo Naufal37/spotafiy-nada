@@ -82,6 +82,10 @@ Parameter efek diukur dari file referensi `a2o-lite-neon-10d.mp3`:
 - Tidak ada slapback/echo 120 ms yang jelas; delay sengaja dikecilkan jadi
   early reflection ~35 ms dengan feedback 0,08 supaya tidak mengganggu bass.
 
+Pergerakan orbitnya digerakkan tiga `OscillatorNode` (cos/sin) yang tersambung
+langsung ke `positionX/Y/Z` panner, jadi berjalan di thread audio dan tidak
+tergantung `requestAnimationFrame` — tidak ada tersendat walau frame drop.
+
 Tombol **10D** di bilah pemutar mengaktifkan/mematikan efek. Perpindahannya
 pakai `setTargetAtTime` (crossfade kering–basah), jadi tidak ada suara "klik"
 atau lompatan mendadak. Status tombol disimpan di `localStorage`.

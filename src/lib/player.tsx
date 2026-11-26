@@ -334,21 +334,36 @@ export function PlayerProvider({ clientId, premium, onTrackStart, children }: Pl
     const graph: SpatialGraph = { ctx, dry, wet, panner, master, frame: 0 };
     graphRef.current = graph;
 
-    const startedAt = ctx.currentTime;
-    const animate = () => {
-      const active = graphRef.current;
-      if (!active) return;
-      const elapsed = active.ctx.currentTime - startedAt;
-      // ~8 detik per putaran, mengikuti modulasi pan file referensi (~0,128 Hz).
-      const angle = (elapsed * Math.PI * 2) / 8;
-      const now = active.ctx.currentTime;
-      // Orbit mengelilingi listener; setTargetAtTime menghaluskan tiap frame.
-      active.panner.positionX.setTargetAtTime(Math.cos(angle) * 1.15, now, 0.04);
-      active.panner.positionY.setTargetAtTime(Math.sin(angle * 2) * 0.15, now, 0.04);
-      active.panner.positionZ.setTargetAtTime(Math.sin(angle) * 1.15, now, 0.04);
-      active.frame = requestAnimationFrame(animate);
-    };
-    graph.frame = requestAnimationFrame(animate);
+    // Orbit digerakkan oscillator langsung di thread audio — bukan
+    // requestAnimationFrame — supaya tidak ada jeda/tersendat ketika frame
+    // turun. Cos/sin murni juga bikin posisinya kontinu tiap sample.
+    const cosWave = ctx.createPeriodicWave(new Float32Array([0, 1]), new Float32Array([0, 0]));
+    const sinWave = ctx.createPeriodicWave(new Float32Array([0, 0]), new Float32Array([0, 1]));
+    const orbitX = ctx.createOscillator();
+    const orbitZ = ctx.createOscillator();
+    const orbitY = ctx.createOscillator();
+    orbitX.setPeriodicWave(cosWave);
+    orbitZ.setPeriodicWave(sinWave);
+    orbitY.setPeriodicWave(sinWave);
+    orbitX.frequency.value = 1 / 8;
+    orbitZ.frequency.value = 1 / 8;
+    orbitY.frequency.value = 1 / 4;
+
+    const depthX = ctx.createGain();
+    const depthZ = ctx.createGain();
+    const depthY = ctx.createGain();
+    depthX.gain.value = 1.15;
+    depthZ.gain.value = 1.15;
+    depthY.gain.value = 0.15;
+    orbitX.connect(depthX);
+    depthX.connect(panner.positionX);
+    orbitZ.connect(depthZ);
+    depthZ.connect(panner.positionZ);
+    orbitY.connect(depthY);
+    depthY.connect(panner.positionY);
+    orbitX.start();
+    orbitZ.start();
+    orbitY.start();
     return graph;
   }, [localAudio]);
 
