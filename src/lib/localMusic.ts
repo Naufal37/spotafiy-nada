@@ -1,5 +1,10 @@
 import type { Track } from '../types';
 
+interface LocalStemEntry {
+  vocals: string;
+  instrumental: string;
+}
+
 interface LocalTrackEntry {
   id: string;
   title: string;
@@ -7,6 +12,7 @@ interface LocalTrackEntry {
   album?: string;
   file: string;
   durationMs?: number;
+  stems?: LocalStemEntry;
 }
 
 /**
@@ -31,7 +37,17 @@ function isEntry(value: unknown): value is LocalTrackEntry {
   return typeof entry.id === 'string' && typeof entry.title === 'string' && typeof entry.file === 'string';
 }
 
+function audioUrl(file: string): string {
+  return `/audio/imports/${encodeURIComponent(file)}`;
+}
+
 function toLocalTrack(entry: LocalTrackEntry): Track {
+  const stems = entry.stems;
+  const validStems =
+    stems && typeof stems.vocals === 'string' && typeof stems.instrumental === 'string'
+      ? { vocals: audioUrl(stems.vocals), instrumental: audioUrl(stems.instrumental) }
+      : null;
+
   return {
     id: `local:${entry.id}`,
     uri: null,
@@ -44,7 +60,8 @@ function toLocalTrack(entry: LocalTrackEntry): Track {
     artworkSmall: null,
     durationMs: entry.durationMs ?? 0,
     previewUrl: null,
-    streamUrl: `/audio/imports/${encodeURIComponent(entry.file)}`,
+    streamUrl: audioUrl(entry.file),
+    stems: validStems,
     explicit: false,
     popularity: 0,
     releaseYear: null,

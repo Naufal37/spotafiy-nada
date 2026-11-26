@@ -12,7 +12,7 @@ import type { Track } from '../types';
 import { getAccessToken } from './auth';
 import { storage } from './storage';
 
-export type Engine = 'idle' | 'preview' | 'spotify' | 'local';
+export type Engine = 'idle' | 'preview' | 'spotify' | 'local' | 'stems';
 export type SdkStatus = 'off' | 'loading' | 'ready' | 'error' | 'no-premium';
 
 interface SpatialGraph {
@@ -21,6 +21,17 @@ interface SpatialGraph {
   wet: GainNode;
   panner: StereoPannerNode;
   master: GainNode;
+  frame: number;
+}
+
+interface StemGraph {
+  ctx: AudioContext;
+  vocalPanner: StereoPannerNode;
+  instrumentalPanner: StereoPannerNode;
+  master: GainNode;
+  /** 1 = vokal kiri / instrumen kanan, -1 = sebaliknya. */
+  side: number;
+  nextSwap: number;
   frame: number;
 }
 
@@ -74,6 +85,20 @@ export function PlayerProvider({ clientId, premium, onTrackStart, children }: Pl
     return element;
   });
 
+  // Dua elemen untuk stem vokal/instrumen yang diputar sinkron.
+  const [vocalAudio] = useState(() => {
+    const element = new Audio();
+    element.preload = 'metadata';
+    element.volume = 1;
+    return element;
+  });
+  const [instrumentalAudio] = useState(() => {
+    const element = new Audio();
+    element.preload = 'metadata';
+    element.volume = 1;
+    return element;
+  });
+
   const [queue, setQueue] = useState<Track[]>([]);
   const [index, setIndex] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -90,6 +115,7 @@ export function PlayerProvider({ clientId, premium, onTrackStart, children }: Pl
   const queueRef = useRef<Track[]>([]);
   const sdkPlayerRef = useRef<SpotifySdkPlayer | null>(null);
   const graphRef = useRef<SpatialGraph | null>(null);
+  const stemGraphRef = useRef<StemGraph | null>(null);
   const onTrackStartRef = useRef(onTrackStart);
   const startingRef = useRef(false);
   const spatialRef = useRef(spatial);
@@ -123,9 +149,11 @@ export function PlayerProvider({ clientId, premium, onTrackStart, children }: Pl
   useEffect(() => {
     const isActive = (element: HTMLAudioElement) =>
       (engineRef.current === 'preview' && element === audio) ||
-      (engineRef.current === 'local' && element === localAudio);
+      (engineRef.current === 'local' && element === localAudio) ||
+      (engineRef.current === 'stems' && element === vocalAudio) ||
+      (engineRef.current === 'stems' && element === instrumentalAudio);
 
-    const handlers = [audio, localAudio].map((element) => ({
+    const handlers = [audio, localAudio, vocalAudio, instrumentalAudio].map((element) => ({
       element,
       time: () => {
         if (!isActive(element)) return;
@@ -145,7 +173,9 @@ export function PlayerProvider({ clientId, premium, onTrackStart, children }: Pl
         setError(
           engineRef.current === 'local'
             ? 'Lagu import gagal dimuat. Cek nama file di manifest.json.'
-            : 'Preview lagu ini gagal dimuat.',
+            : engineRef.current === 'stems'
+              ? 'Stem vokal/instrumen gagal dimuat. Cek manifest.json.'
+              : 'Preview lagu ini gagal dimuat.',
         );
         setIsPlaying(false);
       },
@@ -166,7 +196,7 @@ export function PlayerProvider({ clientId, premium, onTrackStart, children }: Pl
         handler.element.removeEventListener('error', handler.error);
       }
     };
-  }, [audio, localAudio]);
+  }, [audio, localAudio, vocalAudio, instrumentalAudio]);
 
   /** Graf Web Audio untuk efek 8D. Dibuat sekali saat lagu lokal pertama diputar. */
   const ensureGraph = useCallback(() => {
@@ -221,13 +251,85 @@ export function PlayerProvider({ clientId, premium, onTrackStart, children }: Pl
     return graph;
   }, [localAudio]);
 
+  /** Graf untuk vokal/instrumen terpisah: pan hard kiri–kanan yang bergantian. */
+  const ensureStemGraph = useCallback(() => {
+    if (stemGraphRef.current) return stemGraphRef.current;
+    const Ctor =
+      window.AudioContext ??
+      (window as typeof window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+    if (!Ctor) return null;
+
+    const ctx = new Ctor();
+    const vocalSource = ctx.createMediaElementSource(vocalAudio);
+    const instrumentalSource = ctx.createMediaElementSource(instrumentalAudio);
+    const vocalPanner = ctx.createStereoPanner();
+    const instrumentalPanner = ctx.createStereoPanner();
+    const master = ctx.createGain();
+
+    vocalSource.connect(vocalPanner);
+    vocalPanner.connect(master);
+    instrumentalSource.connect(instrumentalPanner);
+    instrumentalPanner.connect(master);
+    master.connect(ctx.destination);
+    master.gain.value = volumeRef.current;
+
+    const graph: StemGraph = {
+      ctx,
+      vocalPanner,
+      instrumentalPanner,
+      master,
+      side: 1,
+      nextSwap: ctx.currentTime + 6,
+      frame: 0,
+    };
+    stemGraphRef.current = graph;
+
+    const applySides = (smooth: number) => {
+      const active = stemGraphRef.current;
+      if (!active) return;
+      const now = active.ctx.currentTime;
+      active.vocalPanner.pan.setTargetAtTime(
+        spatialRef.current ? -0.9 * active.side : 0,
+        now,
+        smooth,
+      );
+      active.instrumentalPanner.pan.setTargetAtTime(
+        spatialRef.current ? 0.9 * active.side : 0,
+        now,
+        smooth,
+      );
+    };
+
+    applySides(0.01);
+
+    const animate = () => {
+      const active = stemGraphRef.current;
+      if (!active) return;
+      if (spatialRef.current && active.ctx.currentTime >= active.nextSwap) {
+        active.side *= -1;
+        active.nextSwap = active.ctx.currentTime + 6;
+        applySides(0.35);
+      }
+      active.frame = requestAnimationFrame(animate);
+    };
+    graph.frame = requestAnimationFrame(animate);
+    return graph;
+  }, [instrumentalAudio, vocalAudio]);
+
   useEffect(
     () => () => {
       const graph = graphRef.current;
-      if (!graph) return;
-      cancelAnimationFrame(graph.frame);
-      void graph.ctx.close();
-      graphRef.current = null;
+      if (graph) {
+        cancelAnimationFrame(graph.frame);
+        void graph.ctx.close();
+        graphRef.current = null;
+      }
+      const stem = stemGraphRef.current;
+      if (stem) {
+        cancelAnimationFrame(stem.frame);
+        void stem.ctx.close();
+        stemGraphRef.current = null;
+      }
     },
     [],
   );
@@ -237,6 +339,8 @@ export function PlayerProvider({ clientId, premium, onTrackStart, children }: Pl
     sdkPlayerRef.current?.setVolume(volume).catch(() => undefined);
     const graph = graphRef.current;
     if (graph) graph.master.gain.setTargetAtTime(volume, graph.ctx.currentTime, 0.05);
+    const stem = stemGraphRef.current;
+    if (stem) stem.master.gain.setTargetAtTime(volume, stem.ctx.currentTime, 0.05);
   }, [audio, volume]);
 
   // -------------------------------------------------------------------------
@@ -400,6 +504,42 @@ export function PlayerProvider({ clientId, premium, onTrackStart, children }: Pl
     [ensureGraph, localAudio],
   );
 
+  const playStems = useCallback(
+    async (track: Track): Promise<boolean> => {
+      if (!track.stems) return false;
+      const graph = ensureStemGraph();
+      if (!graph) return false;
+      try {
+        await graph.ctx.resume();
+        vocalAudio.src = track.stems.vocals;
+        instrumentalAudio.src = track.stems.instrumental;
+        vocalAudio.currentTime = 0;
+        instrumentalAudio.currentTime = 0;
+        graph.side = 1;
+        graph.nextSwap = graph.ctx.currentTime + 6;
+        graph.vocalPanner.pan.setTargetAtTime(
+          spatialRef.current ? -0.9 : 0,
+          graph.ctx.currentTime,
+          0.05,
+        );
+        graph.instrumentalPanner.pan.setTargetAtTime(
+          spatialRef.current ? 0.9 : 0,
+          graph.ctx.currentTime,
+          0.05,
+        );
+        setEngine('stems');
+        setDurationMs(track.durationMs);
+        setPositionMs(0);
+        await Promise.all([vocalAudio.play(), instrumentalAudio.play()]);
+        setIsPlaying(true);
+        return true;
+      } catch {
+        return false;
+      }
+    },
+    [ensureStemGraph, instrumentalAudio, vocalAudio],
+  );
+
   const startAt = useCallback(
     async (tracks: Track[], startIndex: number) => {
       if (startingRef.current) return;
@@ -417,6 +557,14 @@ export function PlayerProvider({ clientId, premium, onTrackStart, children }: Pl
       try {
         audio.pause();
         localAudio.pause();
+        vocalAudio.pause();
+        instrumentalAudio.pause();
+
+        // Stem yang sudah dipisah diputar bergantian kiri–kanan.
+        if (track.stems) {
+          const ok = await playStems(track);
+          if (ok) return;
+        }
 
         // Lagu import selalu lewat jalur lokal supaya efek 8D bisa diproses.
         if (track.streamUrl) {
@@ -445,7 +593,17 @@ export function PlayerProvider({ clientId, premium, onTrackStart, children }: Pl
         startingRef.current = false;
       }
     },
-    [audio, localAudio, playLocal, playPreview, playThroughSpotify, spotifyAvailable],
+    [
+      audio,
+      instrumentalAudio,
+      localAudio,
+      playLocal,
+      playPreview,
+      playStems,
+      playThroughSpotify,
+      spotifyAvailable,
+      vocalAudio,
+    ],
   );
 
   const playQueue = useCallback(
@@ -471,10 +629,14 @@ export function PlayerProvider({ clientId, premium, onTrackStart, children }: Pl
       setIsPlaying(false);
       if (engineRef.current === 'preview') audio.pause();
       if (engineRef.current === 'local') localAudio.pause();
+      if (engineRef.current === 'stems') {
+        vocalAudio.pause();
+        instrumentalAudio.pause();
+      }
       return;
     }
     void startAt(tracks, target);
-  }, [audio, index, localAudio, startAt]);
+  }, [audio, index, instrumentalAudio, localAudio, startAt, vocalAudio]);
 
   const nextRef = useRef(next);
   useEffect(() => {
@@ -487,16 +649,33 @@ export function PlayerProvider({ clientId, premium, onTrackStart, children }: Pl
     if (positionMs > 4000) {
       if (engineRef.current === 'preview') audio.currentTime = 0;
       else if (engineRef.current === 'local') localAudio.currentTime = 0;
-      else void sdkPlayerRef.current?.seek(0);
+      else if (engineRef.current === 'stems') {
+        vocalAudio.currentTime = 0;
+        instrumentalAudio.currentTime = 0;
+      } else void sdkPlayerRef.current?.seek(0);
       setPositionMs(0);
       return;
     }
     void startAt(tracks, Math.max(0, index - 1));
-  }, [audio, index, localAudio, positionMs, startAt]);
+  }, [audio, index, instrumentalAudio, localAudio, positionMs, startAt, vocalAudio]);
 
   const toggle = useCallback(() => {
     if (!current) {
       if (queue.length > 0) playAt(0);
+      return;
+    }
+
+    if (engineRef.current === 'stems') {
+      if (vocalAudio.paused) {
+        if (stemGraphRef.current) void stemGraphRef.current.ctx.resume();
+        void Promise.all([vocalAudio.play(), instrumentalAudio.play()])
+          .then(() => setIsPlaying(true))
+          .catch(() => setIsPlaying(false));
+      } else {
+        vocalAudio.pause();
+        instrumentalAudio.pause();
+        setIsPlaying(false);
+      }
       return;
     }
 
@@ -523,7 +702,7 @@ export function PlayerProvider({ clientId, premium, onTrackStart, children }: Pl
     }
 
     playAt(index);
-  }, [audio, current, index, localAudio, playAt, queue.length]);
+  }, [audio, current, index, instrumentalAudio, localAudio, playAt, queue.length, vocalAudio]);
 
   const seek = useCallback(
     (ms: number) => {
@@ -533,11 +712,14 @@ export function PlayerProvider({ clientId, premium, onTrackStart, children }: Pl
         audio.currentTime = clamped / 1000;
       } else if (engineRef.current === 'local') {
         localAudio.currentTime = clamped / 1000;
+      } else if (engineRef.current === 'stems') {
+        vocalAudio.currentTime = clamped / 1000;
+        instrumentalAudio.currentTime = clamped / 1000;
       } else if (engineRef.current === 'spotify') {
         void sdkPlayerRef.current?.seek(clamped);
       }
     },
-    [audio, durationMs, localAudio],
+    [audio, durationMs, instrumentalAudio, localAudio, vocalAudio],
   );
 
   const setVolume = useCallback((value: number) => {
@@ -553,13 +735,22 @@ export function PlayerProvider({ clientId, premium, onTrackStart, children }: Pl
     storage.saveSpatial(next);
 
     const graph = graphRef.current;
-    if (!graph) return;
-    // Crossfade kering → basah supaya efek nyala/mati tanpa klik.
-    const now = graph.ctx.currentTime;
-    graph.dry.gain.cancelScheduledValues(now);
-    graph.wet.gain.cancelScheduledValues(now);
-    graph.dry.gain.setTargetAtTime(next ? 0 : 1, now, 0.18);
-    graph.wet.gain.setTargetAtTime(next ? 1 : 0, now, 0.18);
+    if (graph) {
+      // Crossfade kering → basah supaya efek nyala/mati tanpa klik.
+      const now = graph.ctx.currentTime;
+      graph.dry.gain.cancelScheduledValues(now);
+      graph.wet.gain.cancelScheduledValues(now);
+      graph.dry.gain.setTargetAtTime(next ? 0 : 1, now, 0.18);
+      graph.wet.gain.setTargetAtTime(next ? 1 : 0, now, 0.18);
+    }
+
+    const stem = stemGraphRef.current;
+    if (stem) {
+      // Matikan efek = kedua stem kembali ke tengah (mix normal).
+      const now = stem.ctx.currentTime;
+      stem.vocalPanner.pan.setTargetAtTime(next ? -0.9 * stem.side : 0, now, 0.3);
+      stem.instrumentalPanner.pan.setTargetAtTime(next ? 0.9 * stem.side : 0, now, 0.3);
+    }
   }, []);
 
   const addToQueue = useCallback((track: Track): boolean => {
@@ -593,6 +784,14 @@ export function PlayerProvider({ clientId, premium, onTrackStart, children }: Pl
         setPositionMs(localAudio.currentTime * 1000);
         return;
       }
+      if (engineRef.current === 'stems') {
+        setPositionMs(vocalAudio.currentTime * 1000);
+        // Koreksi drift kecil supaya vokal tidak keluar dari beat instrumen.
+        if (Math.abs(vocalAudio.currentTime - instrumentalAudio.currentTime) > 0.08) {
+          instrumentalAudio.currentTime = vocalAudio.currentTime;
+        }
+        return;
+      }
       const player = sdkPlayerRef.current;
       if (engineRef.current === 'spotify' && player) {
         void player.getCurrentState().then((state) => {
@@ -604,7 +803,7 @@ export function PlayerProvider({ clientId, premium, onTrackStart, children }: Pl
       }
     }, 600);
     return () => window.clearInterval(timer);
-  }, [audio, isPlaying, localAudio]);
+  }, [audio, instrumentalAudio, isPlaying, localAudio, vocalAudio]);
 
   // Simpan antrean supaya tidak hilang saat refresh.
   useEffect(() => {

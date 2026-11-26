@@ -91,6 +91,8 @@ Vercel:
 - Mood sync hanya mengubah suasana visual, bukan menganalisis audio.
 - Efek 8D hanya berlaku untuk lagu import: Spotify SDK tidak bisa di-routing
   ke Web Audio, jadi efek tidak dipaksakan ke lagu Spotify.
+- Stem vokal/instrumen hasil Demucs disimpan lokal di `public/audio/imports/`
+  dan tidak otomatis di-commit kalau tidak mau dipublish.
 - `prefers-reduced-motion` dihormati; semua kontrol punya label `aria`.
 
 ## Struktur

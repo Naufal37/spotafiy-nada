@@ -22,6 +22,28 @@ lokal, bukan Spotify. Jalur lokal bisa diproses Web Audio, jadi efek 8D
 
 `durationMs` tidak wajib — aplikasi membaca durasi dari metadata file.
 
+## Stem vokal / instrumen
+
+Kalau lagu sudah dipisah (misalnya dengan Demucs), tambahkan `stems`:
+
+```json
+{
+  "id": "illit-magnetic",
+  "title": "Magnetic",
+  "artist": "ILLIT",
+  "file": "illit-magnetic.mp3",
+  "stems": {
+    "vocals": "illit-magnetic_vocals.mp3",
+    "instrumental": "illit-magnetic_no_vocals.mp3"
+  }
+}
+```
+
+Lagu dengan `stems` diputar dari kedua file secara sinkron: vokal di satu
+telinga, instrumen di telinga lainnya, lalu kedua sisi ditukar tiap 6 detik
+dengan transisi halus. Tombol di pemutar berubah dari **8D** jadi **Split**
+dan bisa mematikan efek supaya kembali ke mix normal.
+
 Aplikasi membaca daftar ini dari `/audio/imports/manifest.json`. Karena satu
 origin dengan halaman, tidak ada masalah CORS dan file bisa langsung masuk
 `AudioContext`.

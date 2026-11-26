@@ -4,13 +4,21 @@
     "title": "Magnetic",
     "artist": "ILLIT",
     "album": "SUPER REAL ME",
-    "file": "illit-magnetic.mp3"
+    "file": "illit-magnetic.mp3",
+    "stems": {
+      "vocals": "illit-magnetic_vocals.mp3",
+      "instrumental": "illit-magnetic_no_vocals.mp3"
+    }
   },
   {
     "id": "illit-its-me",
     "title": "It's Me",
     "artist": "ILLIT",
     "album": "SUPER REAL ME",
-    "file": "illit-its-me.mp3"
+    "file": "illit-its-me.mp3",
+    "stems": {
+      "vocals": "illit-its-me_vocals.mp3",
+      "instrumental": "illit-its-me_no_vocals.mp3"
+    }
   }
 ]

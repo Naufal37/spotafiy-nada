@@ -69,18 +69,24 @@ export function PlayerBar({
   const duration = durationMs || track?.durationMs || 0;
   const progress = duration > 0 ? Math.min(1, positionMs / duration) : 0;
   const disabled = !track;
+  const hasStems = Boolean(track?.stems);
+  const modeLabel = hasStems ? 'Split' : '8D';
   const engineLabel =
     engine === 'spotify'
       ? sdkStatus === 'ready'
         ? 'Spotify Premium'
         : 'Menyiapkan pemutar…'
-      : engine === 'local'
+      : engine === 'stems'
         ? spatial
-          ? '8D · Lagu import'
-          : 'Lagu import'
-        : engine === 'preview'
-          ? 'Preview 30 detik'
-          : 'Pemutar siap';
+          ? 'Vokal ↔ Instrumen'
+          : 'Stem (split mati)'
+        : engine === 'local'
+          ? spatial
+            ? '8D · Lagu import'
+            : 'Lagu import'
+          : engine === 'preview'
+            ? 'Preview 30 detik'
+            : 'Pemutar siap';
 
   return (
     <footer className="player-bar" aria-label="Pemutar">
@@ -233,16 +239,18 @@ export function PlayerBar({
           type="button"
           className={`spatial-toggle${spatial ? ' is-active' : ''}`}
           onClick={onToggleSpatial}
-          disabled={!track?.streamUrl}
+          disabled={!track?.streamUrl && !hasStems}
           aria-pressed={spatial}
-          aria-label={spatial ? 'Matikan efek 8D' : 'Nyalakan efek 8D'}
+          aria-label={spatial ? `Matikan efek ${modeLabel}` : `Nyalakan efek ${modeLabel}`}
           title={
-            track?.streamUrl
-              ? 'Efek 8D (spatial binaural) untuk lagu import'
-              : 'Efek 8D hanya untuk lagu import'
+            hasStems
+              ? 'Vokal kiri, instrumen kanan — bergantian tiap 6 detik'
+              : track?.streamUrl
+                ? 'Efek 8D (spatial binaural) untuk lagu import'
+                : 'Efek 8D hanya untuk lagu import'
           }
         >
-          8D
+          {modeLabel}
         </button>
       </div>
     </footer>
