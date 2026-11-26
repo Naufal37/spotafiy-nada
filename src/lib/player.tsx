@@ -12,8 +12,17 @@ import type { Track } from '../types';
 import { getAccessToken } from './auth';
 import { storage } from './storage';
 
-export type Engine = 'idle' | 'preview' | 'spotify';
+export type Engine = 'idle' | 'preview' | 'spotify' | 'local';
 export type SdkStatus = 'off' | 'loading' | 'ready' | 'error' | 'no-premium';
+
+interface SpatialGraph {
+  ctx: AudioContext;
+  dry: GainNode;
+  wet: GainNode;
+  panner: StereoPannerNode;
+  master: GainNode;
+  frame: number;
+}
 
 export interface PlayerApi {
   queue: Track[];
@@ -25,6 +34,7 @@ export interface PlayerApi {
   volume: number;
   engine: Engine;
   sdkStatus: SdkStatus;
+  spatial: boolean;
   error: string | null;
   playQueue: (tracks: Track[], startIndex?: number) => void;
   playAt: (index: number) => void;
@@ -33,6 +43,7 @@ export interface PlayerApi {
   previous: () => void;
   seek: (ms: number) => void;
   setVolume: (value: number) => void;
+  toggleSpatial: () => void;
   addToQueue: (track: Track) => boolean;
   removeFromQueue: (index: number) => void;
   clearError: () => void;
@@ -54,12 +65,22 @@ export function PlayerProvider({ clientId, premium, onTrackStart, children }: Pl
     return element;
   });
 
+  // Elemen terpisah untuk lagu import: sekali dipakai createMediaElementSource,
+  // elemen itu tidak bisa dipakai ulang untuk preview Spotify.
+  const [localAudio] = useState(() => {
+    const element = new Audio();
+    element.preload = 'metadata';
+    element.volume = 1;
+    return element;
+  });
+
   const [queue, setQueue] = useState<Track[]>([]);
   const [index, setIndex] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
   const [positionMs, setPositionMs] = useState(0);
   const [durationMs, setDurationMs] = useState(0);
   const [volume, setVolumeState] = useState(() => storage.loadVolume());
+  const [spatial, setSpatial] = useState(() => storage.loadSpatial());
   const [engine, setEngine] = useState<Engine>('idle');
   const [sdkStatus, setSdkStatus] = useState<SdkStatus>('off');
   const [deviceId, setDeviceId] = useState<string | null>(null);
@@ -68,12 +89,23 @@ export function PlayerProvider({ clientId, premium, onTrackStart, children }: Pl
   const engineRef = useRef<Engine>('idle');
   const queueRef = useRef<Track[]>([]);
   const sdkPlayerRef = useRef<SpotifySdkPlayer | null>(null);
+  const graphRef = useRef<SpatialGraph | null>(null);
   const onTrackStartRef = useRef(onTrackStart);
   const startingRef = useRef(false);
+  const spatialRef = useRef(spatial);
+  const volumeRef = useRef(volume);
 
   useEffect(() => {
     onTrackStartRef.current = onTrackStart;
   }, [onTrackStart]);
+
+  useEffect(() => {
+    spatialRef.current = spatial;
+  }, [spatial]);
+
+  useEffect(() => {
+    volumeRef.current = volume;
+  }, [volume]);
 
   useEffect(() => {
     engineRef.current = engine;
@@ -86,43 +118,125 @@ export function PlayerProvider({ clientId, premium, onTrackStart, children }: Pl
   const current = queue[index] ?? null;
 
   // -------------------------------------------------------------------------
-  // Pemutar fallback: <audio> biasa untuk preview 30 detik.
+  // Pemutar media: preview 30 detik + lagu import lokal.
   // -------------------------------------------------------------------------
   useEffect(() => {
-    const onTime = () => {
-      if (engineRef.current !== 'preview') return;
-      setPositionMs(audio.currentTime * 1000);
-    };
-    const onMeta = () => {
-      if (engineRef.current !== 'preview') return;
-      if (Number.isFinite(audio.duration)) setDurationMs(audio.duration * 1000);
-    };
-    const onEnd = () => {
-      if (engineRef.current !== 'preview') return;
-      setIsPlaying(false);
-      nextRef.current();
-    };
-    const onError = () => {
-      if (engineRef.current !== 'preview') return;
-      setError('Preview lagu ini gagal dimuat.');
-      setIsPlaying(false);
-    };
+    const isActive = (element: HTMLAudioElement) =>
+      (engineRef.current === 'preview' && element === audio) ||
+      (engineRef.current === 'local' && element === localAudio);
 
-    audio.addEventListener('timeupdate', onTime);
-    audio.addEventListener('loadedmetadata', onMeta);
-    audio.addEventListener('ended', onEnd);
-    audio.addEventListener('error', onError);
+    const handlers = [audio, localAudio].map((element) => ({
+      element,
+      time: () => {
+        if (!isActive(element)) return;
+        setPositionMs(element.currentTime * 1000);
+      },
+      meta: () => {
+        if (!isActive(element)) return;
+        if (Number.isFinite(element.duration)) setDurationMs(element.duration * 1000);
+      },
+      end: () => {
+        if (!isActive(element)) return;
+        setIsPlaying(false);
+        nextRef.current();
+      },
+      error: () => {
+        if (!isActive(element)) return;
+        setError(
+          engineRef.current === 'local'
+            ? 'Lagu import gagal dimuat. Cek nama file di manifest.json.'
+            : 'Preview lagu ini gagal dimuat.',
+        );
+        setIsPlaying(false);
+      },
+    }));
+
+    for (const handler of handlers) {
+      handler.element.addEventListener('timeupdate', handler.time);
+      handler.element.addEventListener('loadedmetadata', handler.meta);
+      handler.element.addEventListener('ended', handler.end);
+      handler.element.addEventListener('error', handler.error);
+    }
+
     return () => {
-      audio.removeEventListener('timeupdate', onTime);
-      audio.removeEventListener('loadedmetadata', onMeta);
-      audio.removeEventListener('ended', onEnd);
-      audio.removeEventListener('error', onError);
+      for (const handler of handlers) {
+        handler.element.removeEventListener('timeupdate', handler.time);
+        handler.element.removeEventListener('loadedmetadata', handler.meta);
+        handler.element.removeEventListener('ended', handler.end);
+        handler.element.removeEventListener('error', handler.error);
+      }
     };
-  }, [audio]);
+  }, [audio, localAudio]);
+
+  /** Graf Web Audio untuk efek 8D. Dibuat sekali saat lagu lokal pertama diputar. */
+  const ensureGraph = useCallback(() => {
+    if (graphRef.current) return graphRef.current;
+    const Ctor =
+      window.AudioContext ??
+      (window as typeof window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+    if (!Ctor) return null;
+
+    const ctx = new Ctor();
+    const source = ctx.createMediaElementSource(localAudio);
+    const dry = ctx.createGain();
+    const wet = ctx.createGain();
+    const panner = ctx.createStereoPanner();
+    const delay = ctx.createDelay(1);
+    const feedback = ctx.createGain();
+    const master = ctx.createGain();
+
+    source.connect(dry);
+    dry.connect(master);
+    source.connect(panner);
+    panner.connect(delay);
+    delay.connect(feedback);
+    feedback.connect(delay);
+    delay.connect(wet);
+    wet.connect(master);
+    master.connect(ctx.destination);
+
+    dry.gain.value = spatialRef.current ? 0 : 1;
+    wet.gain.value = spatialRef.current ? 1 : 0;
+    feedback.gain.value = 0.16;
+    delay.delayTime.value = 0.12;
+    master.gain.value = volumeRef.current;
+
+    const graph: SpatialGraph = { ctx, dry, wet, panner, master, frame: 0 };
+    graphRef.current = graph;
+
+    const startedAt = ctx.currentTime;
+    const animate = () => {
+      const active = graphRef.current;
+      if (!active) return;
+      const elapsed = active.ctx.currentTime - startedAt;
+      // Satu putaran penuh ~9 detik. setTargetAtTime bikin perpindahan halus.
+      active.panner.pan.setTargetAtTime(
+        Math.sin((elapsed * Math.PI * 2) / 9) * 0.85,
+        active.ctx.currentTime,
+        0.09,
+      );
+      active.frame = requestAnimationFrame(animate);
+    };
+    graph.frame = requestAnimationFrame(animate);
+    return graph;
+  }, [localAudio]);
+
+  useEffect(
+    () => () => {
+      const graph = graphRef.current;
+      if (!graph) return;
+      cancelAnimationFrame(graph.frame);
+      void graph.ctx.close();
+      graphRef.current = null;
+    },
+    [],
+  );
 
   useEffect(() => {
     audio.volume = volume;
     sdkPlayerRef.current?.setVolume(volume).catch(() => undefined);
+    const graph = graphRef.current;
+    if (graph) graph.master.gain.setTargetAtTime(volume, graph.ctx.currentTime, 0.05);
   }, [audio, volume]);
 
   // -------------------------------------------------------------------------
@@ -264,6 +378,28 @@ export function PlayerProvider({ clientId, premium, onTrackStart, children }: Pl
     [audio],
   );
 
+  const playLocal = useCallback(
+    async (track: Track): Promise<boolean> => {
+      if (!track.streamUrl) return false;
+      const graph = ensureGraph();
+      if (!graph) return false;
+      try {
+        await graph.ctx.resume();
+        localAudio.src = track.streamUrl;
+        localAudio.currentTime = 0;
+        setEngine('local');
+        setDurationMs(track.durationMs);
+        setPositionMs(0);
+        await localAudio.play();
+        setIsPlaying(true);
+        return true;
+      } catch {
+        return false;
+      }
+    },
+    [ensureGraph, localAudio],
+  );
+
   const startAt = useCallback(
     async (tracks: Track[], startIndex: number) => {
       if (startingRef.current) return;
@@ -280,6 +416,13 @@ export function PlayerProvider({ clientId, premium, onTrackStart, children }: Pl
 
       try {
         audio.pause();
+        localAudio.pause();
+
+        // Lagu import selalu lewat jalur lokal supaya efek 8D bisa diproses.
+        if (track.streamUrl) {
+          const ok = await playLocal(track);
+          if (ok) return;
+        }
 
         if (spotifyAvailable) {
           const ok = await playThroughSpotify(tracks.slice(startIndex));
@@ -291,16 +434,18 @@ export function PlayerProvider({ clientId, premium, onTrackStart, children }: Pl
           setIsPlaying(false);
           setEngine('idle');
           setError(
-            track.previewUrl
-              ? 'Lagu ini gagal diputar.'
-              : 'Lagu ini tidak punya preview, dan pemutar Premium belum aktif. Login Spotify Premium untuk memutar lagu utuh.',
+            track.streamUrl
+              ? 'Lagu import gagal diputar. Cek file di folder public/audio/imports.'
+              : track.previewUrl
+                ? 'Lagu ini gagal diputar.'
+                : 'Lagu ini tidak punya preview, dan pemutar Premium belum aktif. Login Spotify Premium untuk memutar lagu utuh.',
           );
         }
       } finally {
         startingRef.current = false;
       }
     },
-    [audio, playPreview, playThroughSpotify, spotifyAvailable],
+    [audio, localAudio, playLocal, playPreview, playThroughSpotify, spotifyAvailable],
   );
 
   const playQueue = useCallback(
@@ -325,10 +470,11 @@ export function PlayerProvider({ clientId, premium, onTrackStart, children }: Pl
     if (target === index) {
       setIsPlaying(false);
       if (engineRef.current === 'preview') audio.pause();
+      if (engineRef.current === 'local') localAudio.pause();
       return;
     }
     void startAt(tracks, target);
-  }, [audio, index, startAt]);
+  }, [audio, index, localAudio, startAt]);
 
   const nextRef = useRef(next);
   useEffect(() => {
@@ -340,12 +486,13 @@ export function PlayerProvider({ clientId, premium, onTrackStart, children }: Pl
     if (tracks.length === 0) return;
     if (positionMs > 4000) {
       if (engineRef.current === 'preview') audio.currentTime = 0;
+      else if (engineRef.current === 'local') localAudio.currentTime = 0;
       else void sdkPlayerRef.current?.seek(0);
       setPositionMs(0);
       return;
     }
     void startAt(tracks, Math.max(0, index - 1));
-  }, [audio, index, positionMs, startAt]);
+  }, [audio, index, localAudio, positionMs, startAt]);
 
   const toggle = useCallback(() => {
     if (!current) {
@@ -353,11 +500,18 @@ export function PlayerProvider({ clientId, premium, onTrackStart, children }: Pl
       return;
     }
 
-    if (engineRef.current === 'preview') {
-      if (audio.paused) {
-        void audio.play().then(() => setIsPlaying(true)).catch(() => setIsPlaying(false));
+    if (engineRef.current === 'preview' || engineRef.current === 'local') {
+      const element = engineRef.current === 'local' ? localAudio : audio;
+      if (element.paused) {
+        if (engineRef.current === 'local' && graphRef.current) {
+          void graphRef.current.ctx.resume();
+        }
+        void element
+          .play()
+          .then(() => setIsPlaying(true))
+          .catch(() => setIsPlaying(false));
       } else {
-        audio.pause();
+        element.pause();
         setIsPlaying(false);
       }
       return;
@@ -369,7 +523,7 @@ export function PlayerProvider({ clientId, premium, onTrackStart, children }: Pl
     }
 
     playAt(index);
-  }, [audio, current, index, playAt, queue.length]);
+  }, [audio, current, index, localAudio, playAt, queue.length]);
 
   const seek = useCallback(
     (ms: number) => {
@@ -377,17 +531,35 @@ export function PlayerProvider({ clientId, premium, onTrackStart, children }: Pl
       setPositionMs(clamped);
       if (engineRef.current === 'preview') {
         audio.currentTime = clamped / 1000;
+      } else if (engineRef.current === 'local') {
+        localAudio.currentTime = clamped / 1000;
       } else if (engineRef.current === 'spotify') {
         void sdkPlayerRef.current?.seek(clamped);
       }
     },
-    [audio, durationMs],
+    [audio, durationMs, localAudio],
   );
 
   const setVolume = useCallback((value: number) => {
     const clamped = Math.min(1, Math.max(0, value));
     setVolumeState(clamped);
     storage.saveVolume(clamped);
+  }, []);
+
+  const toggleSpatial = useCallback(() => {
+    const next = !spatialRef.current;
+    spatialRef.current = next;
+    setSpatial(next);
+    storage.saveSpatial(next);
+
+    const graph = graphRef.current;
+    if (!graph) return;
+    // Crossfade kering → basah supaya efek nyala/mati tanpa klik.
+    const now = graph.ctx.currentTime;
+    graph.dry.gain.cancelScheduledValues(now);
+    graph.wet.gain.cancelScheduledValues(now);
+    graph.dry.gain.setTargetAtTime(next ? 0 : 1, now, 0.18);
+    graph.wet.gain.setTargetAtTime(next ? 1 : 0, now, 0.18);
   }, []);
 
   const addToQueue = useCallback((track: Track): boolean => {
@@ -417,6 +589,10 @@ export function PlayerProvider({ clientId, premium, onTrackStart, children }: Pl
         setPositionMs(audio.currentTime * 1000);
         return;
       }
+      if (engineRef.current === 'local') {
+        setPositionMs(localAudio.currentTime * 1000);
+        return;
+      }
       const player = sdkPlayerRef.current;
       if (engineRef.current === 'spotify' && player) {
         void player.getCurrentState().then((state) => {
@@ -428,7 +604,7 @@ export function PlayerProvider({ clientId, premium, onTrackStart, children }: Pl
       }
     }, 600);
     return () => window.clearInterval(timer);
-  }, [audio, isPlaying]);
+  }, [audio, isPlaying, localAudio]);
 
   // Simpan antrean supaya tidak hilang saat refresh.
   useEffect(() => {
@@ -446,6 +622,7 @@ export function PlayerProvider({ clientId, premium, onTrackStart, children }: Pl
       volume,
       engine,
       sdkStatus,
+      spatial,
       error,
       playQueue,
       playAt,
@@ -454,6 +631,7 @@ export function PlayerProvider({ clientId, premium, onTrackStart, children }: Pl
       previous,
       seek,
       setVolume,
+      toggleSpatial,
       addToQueue,
       removeFromQueue,
       clearError,
@@ -468,6 +646,7 @@ export function PlayerProvider({ clientId, premium, onTrackStart, children }: Pl
       volume,
       engine,
       sdkStatus,
+      spatial,
       error,
       playQueue,
       playAt,
@@ -476,6 +655,7 @@ export function PlayerProvider({ clientId, premium, onTrackStart, children }: Pl
       previous,
       seek,
       setVolume,
+      toggleSpatial,
       addToQueue,
       removeFromQueue,
       clearError,

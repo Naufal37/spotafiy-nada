@@ -10,6 +10,8 @@ export interface Track {
   artworkSmall: string | null;
   durationMs: number;
   previewUrl: string | null;
+  /** URL audio lokal (lagu import). Bisa diproses Web Audio untuk efek 8D. */
+  streamUrl?: string | null;
   explicit: boolean;
   popularity: number;
   releaseYear: string | null;

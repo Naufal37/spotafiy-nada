@@ -27,12 +27,14 @@ interface PlayerBarProps {
   volume: number;
   engine: Engine;
   sdkStatus: SdkStatus;
+  spatial: boolean;
   favorite: boolean;
   onToggle: () => void;
   onPrevious: () => void;
   onNext: () => void;
   onSeek: (ms: number) => void;
   onVolume: (value: number) => void;
+  onToggleSpatial: () => void;
   onToggleFavorite: () => void;
   onShare: () => void;
   onAddToQueue: () => void;
@@ -51,12 +53,14 @@ export function PlayerBar({
   volume,
   engine,
   sdkStatus,
+  spatial,
   favorite,
   onToggle,
   onPrevious,
   onNext,
   onSeek,
   onVolume,
+  onToggleSpatial,
   onToggleFavorite,
   onShare,
   onAddToQueue,
@@ -70,9 +74,13 @@ export function PlayerBar({
       ? sdkStatus === 'ready'
         ? 'Spotify Premium'
         : 'Menyiapkan pemutar…'
-      : engine === 'preview'
-        ? 'Preview 30 detik'
-        : 'Pemutar siap';
+      : engine === 'local'
+        ? spatial
+          ? '8D · Lagu import'
+          : 'Lagu import'
+        : engine === 'preview'
+          ? 'Preview 30 detik'
+          : 'Pemutar siap';
 
   return (
     <footer className="player-bar" aria-label="Pemutar">
@@ -220,6 +228,22 @@ export function PlayerBar({
             aria-label="Volume"
           />
         </div>
+
+        <button
+          type="button"
+          className={`spatial-toggle${spatial ? ' is-active' : ''}`}
+          onClick={onToggleSpatial}
+          disabled={!track?.streamUrl}
+          aria-pressed={spatial}
+          aria-label={spatial ? 'Matikan efek 8D' : 'Nyalakan efek 8D'}
+          title={
+            track?.streamUrl
+              ? 'Efek 8D (spatial binaural) untuk lagu import'
+              : 'Efek 8D hanya untuk lagu import'
+          }
+        >
+          8D
+        </button>
       </div>
     </footer>
   );

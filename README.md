@@ -16,6 +16,7 @@ konsisten.
 - Spotify Web API lewat proxy serverless `/api/spotify` (Client Secret aman di server)
 - Web Playback SDK (butuh Spotify Premium) + fallback preview 30 detik
 - LRCLIB untuk lirik (tanpa API key)
+- Lagu import lokal dari `public/audio/imports/` + efek 8D (Web Audio API)
 
 ## Menjalankan lokal
 
@@ -82,11 +83,14 @@ Vercel:
 
 ## Batasan yang disengaja
 
-- Tidak ada login admin, upload MP3, atau database sendiri.
+- Tidak ada login admin, upload via browser, atau database sendiri. Lagu import
+  ditaruh manual di `public/audio/imports/` lalu didaftarkan di `manifest.json`.
 - Tidak ada lirik karangan: kalau LRCLIB tidak punya lagunya, panel kosong.
 - Tidak ada tombol dekoratif: semua kontrol berfungsi, dan yang belum ada
   sumbernya diberi label jelas.
 - Mood sync hanya mengubah suasana visual, bukan menganalisis audio.
+- Efek 8D hanya berlaku untuk lagu import: Spotify SDK tidak bisa di-routing
+  ke Web Audio, jadi efek tidak dipaksakan ke lagu Spotify.
 - `prefers-reduced-motion` dihormati; semua kontrol punya label `aria`.
 
 ## Struktur

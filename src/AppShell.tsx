@@ -3,6 +3,7 @@ import type { Track, ViewId } from './types';
 import { useAuth } from './lib/auth-context';
 import { useLibrary } from './lib/library';
 import { usePlayer } from './lib/player';
+import { loadLocalTracks } from './lib/localMusic';
 import { loadDiscovery, SpotifyApiError } from './lib/spotify';
 import { vibeFor } from './lib/vibe';
 import { Sidebar } from './components/Sidebar';
@@ -28,6 +29,7 @@ export function AppShell() {
   const [setupDismissed, setSetupDismissed] = useState(false);
   const [loginHintDismissed, setLoginHintDismissed] = useState(false);
 
+  const [localTracks, setLocalTracks] = useState<Track[]>([]);
   const [discovery, setDiscovery] = useState<Track[]>([]);
   const [discoveryLoading, setDiscoveryLoading] = useState(true);
   const [discoveryError, setDiscoveryError] = useState<string | null>(null);
@@ -47,6 +49,16 @@ export function AppShell() {
     setToast(player.error);
     player.clearError();
   }, [player]);
+
+  useEffect(() => {
+    let alive = true;
+    void loadLocalTracks().then((tracks) => {
+      if (alive) setLocalTracks(tracks);
+    });
+    return () => {
+      alive = false;
+    };
+  }, []);
 
   useEffect(() => {
     if (!auth.ready) return;
@@ -221,7 +233,8 @@ export function AppShell() {
             <div className="banner" role="status">
               <div>
                 <strong>Mode preview.</strong> Login dengan akun Spotify Premium untuk memutar lagu
-                utuh. Tanpa login, hanya lagu yang punya <code>preview_url</code> yang bisa dibunyikan.
+                utuh. Tanpa login, hanya lagu yang punya <code>preview_url</code> yang bisa dibunyikan —
+                tapi lagu import di bagian atas tetap bisa diputar penuh dengan efek 8D.
               </div>
               <button
                 type="button"
@@ -236,6 +249,8 @@ export function AppShell() {
 
           {view === 'listen' ? (
             <HomeView
+              localTracks={localTracks}
+              onPlayLocal={(index) => player.playQueue(localTracks, index)}
               discovery={discovery}
               loading={discoveryLoading}
               error={discoveryError}
@@ -315,12 +330,14 @@ export function AppShell() {
         volume={player.volume}
         engine={player.engine}
         sdkStatus={player.sdkStatus}
+        spatial={player.spatial}
         favorite={current ? library.isFavorite(current.id) : false}
         onToggle={player.toggle}
         onPrevious={player.previous}
         onNext={player.next}
         onSeek={player.seek}
         onVolume={player.setVolume}
+        onToggleSpatial={player.toggleSpatial}
         onToggleFavorite={handleToggleFavorite}
         onShare={() => void handleShare()}
         onAddToQueue={handleQueueCurrent}

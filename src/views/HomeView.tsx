@@ -4,6 +4,8 @@ import { TrackGrid } from '../components/TrackGrid';
 import { IconPlay, IconRefresh, IconSearch } from '../components/Icons';
 
 interface HomeViewProps {
+  localTracks: Track[];
+  onPlayLocal: (index: number) => void;
   discovery: Track[];
   loading: boolean;
   error: string | null;
@@ -16,6 +18,8 @@ interface HomeViewProps {
 }
 
 export function HomeView({
+  localTracks,
+  onPlayLocal,
   discovery,
   loading,
   error,
@@ -26,7 +30,7 @@ export function HomeView({
   onOpenSearch,
   onRetry,
 }: HomeViewProps) {
-  const heroTrack = current ?? discovery[0] ?? null;
+  const heroTrack = current ?? localTracks[0] ?? discovery[0] ?? null;
 
   return (
     <div className="home-view">
@@ -65,6 +69,20 @@ export function HomeView({
           />
         ) : null}
       </section>
+
+      {localTracks.length > 0 ? (
+        <section className="content-section" aria-labelledby="local-title">
+          <div className="section-head">
+            <div>
+              <h2 className="section-title" id="local-title">Lagu import · 8D</h2>
+              <p className="section-sub">
+                Koleksi lokal dengan efek spatial binaural. Putar lalu nyalakan tombol 8D di pemutar.
+              </p>
+            </div>
+          </div>
+          <TrackGrid tracks={localTracks} onPlay={onPlayLocal} />
+        </section>
+      ) : null}
 
       <section className="content-section" aria-labelledby="discovery-title">
         <div className="section-head">

@@ -6,6 +6,7 @@ const RECENT_KEY = `${PREFIX}.recent`;
 const PLAYLISTS_KEY = `${PREFIX}.playlists`;
 const VOLUME_KEY = `${PREFIX}.volume`;
 const QUEUE_KEY = `${PREFIX}.queue`;
+const SPATIAL_KEY = `${PREFIX}.spatial`;
 
 export function readJson<T>(key: string, fallback: T): T {
   try {
@@ -26,18 +27,21 @@ export function writeJson(key: string, value: unknown): void {
 }
 
 /**
- * Data dari versi Jamendo punya `streamUrl` tapi tidak punya `uri`, jadi tidak
- * bisa diputar oleh pemutar Spotify. Saring supaya favorit/playlist lama tidak
- * bikin error saat dibuka kembali setelah balik ke Spotify.
+ * Lagu Spotify punya `uri`, lagu import punya `streamUrl`. Keduanya boleh
+ * disimpan di favorit/playlist/antrean; yang dibuang hanya data rusak yang
+ * tidak bisa diputar salah satu pemutarnya.
  */
-function isSpotifyTrack(value: unknown): value is Track {
+function isPlayableTrack(value: unknown): value is Track {
   if (!value || typeof value !== 'object') return false;
   const track = value as Partial<Track>;
-  return typeof track.uri === 'string' && track.uri.length > 0;
+  return (
+    (typeof track.uri === 'string' && track.uri.length > 0) ||
+    (typeof track.streamUrl === 'string' && track.streamUrl.length > 0)
+  );
 }
 
 function loadTracks(key: string): Track[] {
-  return readJson<Track[]>(key, []).filter(isSpotifyTrack);
+  return readJson<Track[]>(key, []).filter(isPlayableTrack);
 }
 
 export const storage = {
@@ -50,7 +54,7 @@ export const storage = {
   loadPlaylists: (): Playlist[] =>
     readJson<Playlist[]>(PLAYLISTS_KEY, []).map((playlist) => ({
       ...playlist,
-      tracks: Array.isArray(playlist.tracks) ? playlist.tracks.filter(isSpotifyTrack) : [],
+      tracks: Array.isArray(playlist.tracks) ? playlist.tracks.filter(isPlayableTrack) : [],
     })),
   savePlaylists: (playlists: Playlist[]) => writeJson(PLAYLISTS_KEY, playlists),
 
@@ -62,4 +66,7 @@ export const storage = {
 
   loadQueue: (): Track[] => loadTracks(QUEUE_KEY),
   saveQueue: (tracks: Track[]) => writeJson(QUEUE_KEY, tracks.slice(0, 80)),
+
+  loadSpatial: (): boolean => readJson<boolean>(SPATIAL_KEY, true),
+  saveSpatial: (enabled: boolean) => writeJson(SPATIAL_KEY, enabled),
 };
