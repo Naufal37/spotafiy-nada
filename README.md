@@ -16,7 +16,8 @@ konsisten.
 - Spotify Web API lewat proxy serverless `/api/spotify` (Client Secret aman di server)
 - Web Playback SDK (butuh Spotify Premium) + fallback preview 30 detik
 - LRCLIB untuk lirik (tanpa API key)
-- Lagu import lokal dari `public/audio/imports/` + efek 8D (Web Audio API)
+- Lagu import lokal dari `public/audio/imports/` + efek 8D (Web Audio API);
+  file yang efeknya sudah ada (10D) diputar apa adanya
 
 ## Menjalankan lokal
 
@@ -92,6 +93,8 @@ Vercel:
 - Efek 8D (HRTF orbit) hanya berlaku untuk lagu import: Spotify SDK tidak bisa
   di-routing ke Web Audio, jadi efek tidak dipaksakan ke lagu Spotify.
 - Mode Split memakai crossfade gain antar kanal kiri/kanan, bukan pan biasa.
+- Entri manifest dengan `preserveEffects: true` tidak melewati Web Audio sama
+  sekali (dipakai untuk file yang efek 10D-nya sudah tertanam).
 - Stem vokal/instrumen hasil Demucs disimpan lokal di `public/audio/imports/`
   dan tidak otomatis di-commit kalau tidak mau dipublish.
 - `prefers-reduced-motion` dihormati; semua kontrol punya label `aria`.

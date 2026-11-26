@@ -14,6 +14,8 @@ export interface Track {
   streamUrl?: string | null;
   /** Stem vokal/instrumen hasil pemisahan; diputar bergantian kiri–kanan. */
   stems?: { vocals: string; instrumental: string } | null;
+  /** File sudah punya efek sendiri (mis. 10D), jangan diproses Web Audio. */
+  preserveEffects?: boolean;
   explicit: boolean;
   popularity: number;
   releaseYear: string | null;

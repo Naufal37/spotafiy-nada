@@ -74,10 +74,11 @@ export function HomeView({
         <section className="content-section" aria-labelledby="local-title">
           <div className="section-head">
             <div>
-              <h2 className="section-title" id="local-title">Lagu import · 8D</h2>
+              <h2 className="section-title" id="local-title">Lagu import</h2>
               <p className="section-sub">
                 Koleksi lokal. Lagu yang sudah dipisah memutar vokal dan instrumen bergantian di
-                telinga kiri/kanan; sisanya memakai efek 8D binaural.
+                telinga kiri/kanan; sisanya memakai efek 8D binaural. Lagu berlabel 10D sudah punya
+                efek di file dan diputar apa adanya.
               </p>
             </div>
           </div>

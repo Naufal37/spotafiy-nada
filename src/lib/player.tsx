@@ -12,7 +12,7 @@ import type { Track } from '../types';
 import { getAccessToken } from './auth';
 import { storage } from './storage';
 
-export type Engine = 'idle' | 'preview' | 'spotify' | 'local' | 'stems';
+export type Engine = 'idle' | 'preview' | 'spotify' | 'local' | 'stems' | 'raw';
 export type SdkStatus = 'off' | 'loading' | 'ready' | 'error' | 'no-premium';
 
 interface SpatialGraph {
@@ -223,6 +223,7 @@ export function PlayerProvider({ clientId, premium, onTrackStart, children }: Pl
   useEffect(() => {
     const isActive = (element: HTMLAudioElement) =>
       (engineRef.current === 'preview' && element === audio) ||
+      (engineRef.current === 'raw' && element === audio) ||
       (engineRef.current === 'local' && element === localAudio) ||
       (engineRef.current === 'stems' && element === vocalAudio) ||
       (engineRef.current === 'stems' && element === instrumentalAudio);
@@ -245,7 +246,7 @@ export function PlayerProvider({ clientId, premium, onTrackStart, children }: Pl
       error: () => {
         if (!isActive(element)) return;
         setError(
-          engineRef.current === 'local'
+          engineRef.current === 'local' || engineRef.current === 'raw'
             ? 'Lagu import gagal dimuat. Cek nama file di manifest.json.'
             : engineRef.current === 'stems'
               ? 'Stem vokal/instrumen gagal dimuat. Cek manifest.json.'
@@ -555,6 +556,29 @@ export function PlayerProvider({ clientId, premium, onTrackStart, children }: Pl
     [audio],
   );
 
+  /**
+   * Lagu import yang efeknya sudah tertanam di file (mis. 10D): diputar apa
+   * adanya lewat elemen audio biasa, tidak di-routing ke graf Web Audio.
+   */
+  const playRaw = useCallback(
+    async (track: Track): Promise<boolean> => {
+      if (!track.streamUrl) return false;
+      try {
+        setEngine('raw');
+        setDurationMs(track.durationMs);
+        setPositionMs(0);
+        audio.src = track.streamUrl;
+        audio.currentTime = 0;
+        await audio.play();
+        setIsPlaying(true);
+        return true;
+      } catch {
+        return false;
+      }
+    },
+    [audio],
+  );
+
   const playLocal = useCallback(
     async (track: Track): Promise<boolean> => {
       if (!track.streamUrl) return false;
@@ -632,13 +656,19 @@ export function PlayerProvider({ clientId, premium, onTrackStart, children }: Pl
         vocalAudio.pause();
         instrumentalAudio.pause();
 
+        // File yang sudah punya efek sendiri diputar apa adanya.
+        if (track.preserveEffects && track.streamUrl) {
+          const ok = await playRaw(track);
+          if (ok) return;
+        }
+
         // Stem yang sudah dipisah diputar bergantian kiri–kanan.
         if (track.stems) {
           const ok = await playStems(track);
           if (ok) return;
         }
 
-        // Lagu import selalu lewat jalur lokal supaya efek 8D bisa diproses.
+        // Lagu import lain lewat jalur lokal supaya efek 8D bisa diproses.
         if (track.streamUrl) {
           const ok = await playLocal(track);
           if (ok) return;
@@ -671,6 +701,7 @@ export function PlayerProvider({ clientId, premium, onTrackStart, children }: Pl
       localAudio,
       playLocal,
       playPreview,
+      playRaw,
       playStems,
       playThroughSpotify,
       spotifyAvailable,
@@ -699,7 +730,7 @@ export function PlayerProvider({ clientId, premium, onTrackStart, children }: Pl
     const target = Math.min(index + 1, tracks.length - 1);
     if (target === index) {
       setIsPlaying(false);
-      if (engineRef.current === 'preview') audio.pause();
+      if (engineRef.current === 'preview' || engineRef.current === 'raw') audio.pause();
       if (engineRef.current === 'local') localAudio.pause();
       if (engineRef.current === 'stems') {
         vocalAudio.pause();
@@ -719,7 +750,7 @@ export function PlayerProvider({ clientId, premium, onTrackStart, children }: Pl
     const tracks = queueRef.current;
     if (tracks.length === 0) return;
     if (positionMs > 4000) {
-      if (engineRef.current === 'preview') audio.currentTime = 0;
+      if (engineRef.current === 'preview' || engineRef.current === 'raw') audio.currentTime = 0;
       else if (engineRef.current === 'local') localAudio.currentTime = 0;
       else if (engineRef.current === 'stems') {
         vocalAudio.currentTime = 0;
@@ -751,7 +782,11 @@ export function PlayerProvider({ clientId, premium, onTrackStart, children }: Pl
       return;
     }
 
-    if (engineRef.current === 'preview' || engineRef.current === 'local') {
+    if (
+      engineRef.current === 'preview' ||
+      engineRef.current === 'raw' ||
+      engineRef.current === 'local'
+    ) {
       const element = engineRef.current === 'local' ? localAudio : audio;
       if (element.paused) {
         if (engineRef.current === 'local' && graphRef.current) {
@@ -780,7 +815,7 @@ export function PlayerProvider({ clientId, premium, onTrackStart, children }: Pl
     (ms: number) => {
       const clamped = Math.max(0, Math.min(ms, durationMs || ms));
       setPositionMs(clamped);
-      if (engineRef.current === 'preview') {
+      if (engineRef.current === 'preview' || engineRef.current === 'raw') {
         audio.currentTime = clamped / 1000;
       } else if (engineRef.current === 'local') {
         localAudio.currentTime = clamped / 1000;
@@ -844,7 +879,7 @@ export function PlayerProvider({ clientId, premium, onTrackStart, children }: Pl
   useEffect(() => {
     if (!isPlaying) return;
     const timer = window.setInterval(() => {
-      if (engineRef.current === 'preview') {
+      if (engineRef.current === 'preview' || engineRef.current === 'raw') {
         setPositionMs(audio.currentTime * 1000);
         return;
       }

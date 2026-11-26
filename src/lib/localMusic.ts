@@ -13,6 +13,8 @@ interface LocalTrackEntry {
   file: string;
   durationMs?: number;
   stems?: LocalStemEntry;
+  /** true = efek sudah ada di file, putar apa adanya tanpa Web Audio. */
+  preserveEffects?: boolean;
 }
 
 /**
@@ -62,6 +64,7 @@ function toLocalTrack(entry: LocalTrackEntry): Track {
     previewUrl: null,
     streamUrl: audioUrl(entry.file),
     stems: validStems,
+    preserveEffects: entry.preserveEffects === true,
     explicit: false,
     popularity: 0,
     releaseYear: null,

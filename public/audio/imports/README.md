@@ -1,4 +1,4 @@
-# Lagu import lokal (efek 8D)
+# Lagu import lokal (efek 8D / 10D)
 
 Folder ini dipakai aplikasi **nada.** untuk lagu-lagu yang diputar lewat jalur
 lokal, bukan Spotify. Jalur lokal bisa diproses Web Audio, jadi efek 8D
@@ -48,6 +48,23 @@ normal.
 
 Untuk lagu tanpa stem, efek 8D memakai `PannerNode` HRTF yang mengorbit
 mengelilingi kepala tiap 6 detik, bukan sekadar StereoPanner.
+
+## Efek sudah tertanam di file
+
+Kalau audio sudah diproses di luar aplikasi (misalnya file 10D), tambahkan
+`"preserveEffects": true`. Lagu diputar apa adanya lewat elemen audio biasa,
+tanpa `AudioContext` / HRTF / stem, dan tombol efek di pemutar dinonaktifkan:
+
+```json
+{
+  "id": "a2o-lite-neon-10d",
+  "title": "NEON",
+  "artist": "A2O LITE",
+  "file": "a2o-lite-neon-10d.mp3",
+  "durationMs": 208820,
+  "preserveEffects": true
+}
+```
 
 Aplikasi membaca daftar ini dari `/audio/imports/manifest.json`. Karena satu
 origin dengan halaman, tidak ada masalah CORS dan file bisa langsung masuk

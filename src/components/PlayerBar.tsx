@@ -70,9 +70,12 @@ export function PlayerBar({
   const progress = duration > 0 ? Math.min(1, positionMs / duration) : 0;
   const disabled = !track;
   const hasStems = Boolean(track?.stems);
-  const modeLabel = hasStems ? 'Split' : '8D';
+  const hasBakedEffects = Boolean(track?.preserveEffects);
+  const modeLabel = hasBakedEffects ? '10D' : hasStems ? 'Split' : '8D';
   const engineLabel =
-    engine === 'spotify'
+    engine === 'raw'
+      ? '10D · Lagu import'
+      : engine === 'spotify'
       ? sdkStatus === 'ready'
         ? 'Spotify Premium'
         : 'Menyiapkan pemutar…'
@@ -239,15 +242,17 @@ export function PlayerBar({
           type="button"
           className={`spatial-toggle${spatial ? ' is-active' : ''}`}
           onClick={onToggleSpatial}
-          disabled={!track?.streamUrl && !hasStems}
+          disabled={hasBakedEffects || (!track?.streamUrl && !hasStems)}
           aria-pressed={spatial}
           aria-label={spatial ? `Matikan efek ${modeLabel}` : `Nyalakan efek ${modeLabel}`}
           title={
-            hasStems
-              ? 'Vokal kiri, instrumen kanan — bergantian tiap 10 detik'
-              : track?.streamUrl
-                ? 'Efek 8D (spatial binaural) untuk lagu import'
-                : 'Efek 8D hanya untuk lagu import'
+            hasBakedEffects
+              ? 'Efek 10D sudah ada di file — diputar apa adanya'
+              : hasStems
+                ? 'Vokal kiri, instrumen kanan — bergantian tiap 10 detik'
+                : track?.streamUrl
+                  ? 'Efek 8D (spatial binaural) untuk lagu import'
+                  : 'Efek 8D hanya untuk lagu import'
           }
         >
           {modeLabel}

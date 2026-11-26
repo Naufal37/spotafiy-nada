@@ -20,5 +20,14 @@
       "vocals": "illit-its-me_vocals.mp3",
       "instrumental": "illit-its-me_no_vocals.mp3"
     }
+  },
+  {
+    "id": "a2o-lite-neon-10d",
+    "title": "NEON",
+    "artist": "A2O LITE",
+    "album": "10D USE HEADPHONES!",
+    "file": "a2o-lite-neon-10d.mp3",
+    "durationMs": 208820,
+    "preserveEffects": true
   }
 ]
